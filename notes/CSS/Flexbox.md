@@ -1,7 +1,7 @@
 # Flexbox
 
 <!-- NOTE-NAV-TOP:START -->
-[↑ CSS](<./README.md>) · [⌂ Все разделы](<../../README.md>)
+[↑ CSS](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Grid →](<./Grid.md>)
 <!-- NOTE-NAV-TOP:END -->
 
 ## Быстрый ответ
@@ -37,11 +37,19 @@ Flexbox удобен для toolbar, navbar, ряда карточек, расп
 <details>
 <summary><strong>Уточнения</strong></summary>
 
+<dl>
+<dd>
+<h2></h2>
+
 - `justify-content` выравнивает по main axis, `align-items` - по cross axis.
 - `flex: 1` обычно раскрывается как `flex: 1 1 0%`.
 - `flex-wrap` разрешает перенос элементов.
 - `min-width: 0` часто нужен flex-item с длинным текстом.
 - Flexbox одномерен, Grid управляет строками и колонками одновременно.
+
+<h2></h2>
+</dd>
+</dl>
 
 </details>
 
@@ -76,7 +84,7 @@ Flexbox удобен для toolbar, navbar, ряда карточек, расп
 
 ## Связанные темы
 
-- [Grid](<../../Конспект для подготовки/CSS/Grid.md>)
+- [Grid](<./Grid.md>)
 - [Box Model](<../../Конспект для подготовки/CSS/Box Model.md>)
 - [Центрирование](<../../Конспект для подготовки/CSS/Центрирование.md>)
 - [Позиционирование](<../../Конспект для подготовки/CSS/Позиционирование.md>)
@@ -90,5 +98,5 @@ Flexbox удобен для toolbar, navbar, ряда карточек, расп
 ---
 
 <!-- NOTE-NAV-BOTTOM:START -->
-[↑ CSS](<./README.md>) · [⌂ Все разделы](<../../README.md>)
+[↑ CSS](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Grid →](<./Grid.md>)
 <!-- NOTE-NAV-BOTTOM:END -->

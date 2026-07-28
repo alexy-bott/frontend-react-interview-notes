@@ -1,7 +1,7 @@
 # Event Loop
 
 <!-- NOTE-NAV-TOP:START -->
-[↑ JavaScript](<./README.md>) · [⌂ Все разделы](<../../README.md>)
+[↑ JavaScript](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Promise →](<./Promise.md>)
 <!-- NOTE-NAV-TOP:END -->
 
 ## Быстрый ответ
@@ -134,7 +134,7 @@ console.log("2");
 
 ## Связанные темы
 
-- [Promise](<../../Конспект для подготовки/JavaScript/Promise.md>)
+- [Promise](<./Promise.md>)
 - [async await](<../../Конспект для подготовки/JavaScript/async await.md>)
 - [Timers setTimeout setInterval](<../../Конспект для подготовки/JavaScript/Timers setTimeout setInterval.md>)
 - [Promise combinators](<../../Конспект для подготовки/JavaScript/Promise combinators.md>)
@@ -153,5 +153,5 @@ console.log("2");
 ---
 
 <!-- NOTE-NAV-BOTTOM:START -->
-[↑ JavaScript](<./README.md>) · [⌂ Все разделы](<../../README.md>)
+[↑ JavaScript](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Promise →](<./Promise.md>)
 <!-- NOTE-NAV-BOTTOM:END -->

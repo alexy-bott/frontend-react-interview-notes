@@ -1,7 +1,16 @@
 # JavaScript
 
-[⌂ Все разделы](<../../README.md>)
+<!-- SECTION-NAV:START -->
+[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./Event Loop.md>)
 
-## Материалы
+Заметок в разделе: **2**
+<!-- SECTION-NAV:END -->
 
-- [Event Loop](<./Event Loop.md>)
+## Карта раздела
+
+Сначала разбирается порядок выполнения в Event Loop, затем — модель асинхронного результата Promise.
+
+## Последовательность материалов
+
+1. [Event Loop](<./Event Loop.md>)
+2. [Promise](<./Promise.md>)

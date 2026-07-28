@@ -10,7 +10,14 @@ SOURCE_ROOT = ROOT / "Конспект для подготовки"
 
 PILOTS = {
     SOURCE_ROOT / "CSS" / "Flexbox.md": ROOT / "notes" / "CSS" / "Flexbox.md",
+    SOURCE_ROOT / "CSS" / "Grid.md": ROOT / "notes" / "CSS" / "Grid.md",
     SOURCE_ROOT / "JavaScript" / "Event Loop.md": ROOT / "notes" / "JavaScript" / "Event Loop.md",
+    SOURCE_ROOT / "JavaScript" / "Promise.md": ROOT / "notes" / "JavaScript" / "Promise.md",
+}
+
+SECTION_DESCRIPTIONS = {
+    "CSS": "Материалы идут от одномерной раскладки к двумерной: сначала Flexbox, затем CSS Grid.",
+    "JavaScript": "Сначала разбирается порядок выполнения в Event Loop, затем — модель асинхронного результата Promise.",
 }
 
 WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
@@ -56,6 +63,8 @@ def markdown_link(match: re.Match[str], current_source: Path, output_file: Path)
         label = target.partition("#")[2] or Path(target.partition("#")[0]).name
 
     relative = os.path.relpath(destination, output_file.parent).replace(os.sep, "/")
+    if "/" not in relative and not relative.startswith("."):
+        relative = f"./{relative}"
     return f"[{label}](<{relative}{anchor}>)"
 
 
@@ -98,7 +107,15 @@ def convert_body(text: str, current_source: Path, output_file: Path) -> str:
                     "<details>",
                     f"<summary><strong>{summary}</strong></summary>",
                     "",
+                    "<dl>",
+                    "<dd>",
+                    "<h2></h2>",
+                    "",
                     *details,
+                    "",
+                    "<h2></h2>",
+                    "</dd>",
+                    "</dl>",
                     "",
                     "</details>",
                 ]
@@ -120,11 +137,40 @@ def convert_body(text: str, current_source: Path, output_file: Path) -> str:
     return "\n".join(output).strip()
 
 
+def markdown_destination(current_file: Path, destination: Path) -> str:
+    relative = os.path.relpath(destination, current_file.parent).replace(os.sep, "/")
+    if "/" not in relative and not relative.startswith("."):
+        relative = f"./{relative}"
+    return f"<{relative}>"
+
+
+def section_notes(section: str) -> list[Path]:
+    return [output for output in PILOTS.values() if output.parent.name == section]
+
+
+def note_navigation(output_file: Path) -> str:
+    notes = section_notes(output_file.parent.name)
+    index = notes.index(output_file)
+    parts: list[str] = []
+
+    if index > 0:
+        previous = notes[index - 1]
+        parts.append(f"[← {previous.stem}]({markdown_destination(output_file, previous)})")
+
+    parts.append(f"[↑ {output_file.parent.name}](<./README.md>)")
+    parts.append("[⌂ Все разделы](<../../README.md>)")
+
+    if index + 1 < len(notes):
+        following = notes[index + 1]
+        parts.append(f"[{following.stem} →]({markdown_destination(output_file, following)})")
+
+    return " · ".join(parts)
+
+
 def build_note(source: Path, output_file: Path) -> None:
-    section = output_file.parent.name
     title = output_file.stem
     body = convert_body(source.read_text(encoding="utf-8"), source, output_file)
-    nav = f"[↑ {section}](<./README.md>) · [⌂ Все разделы](<../../README.md>)"
+    nav = note_navigation(output_file)
     result = f"""# {title}
 
 <!-- NOTE-NAV-TOP:START -->
@@ -143,10 +189,41 @@ def build_note(source: Path, output_file: Path) -> None:
     output_file.write_text(result, encoding="utf-8", newline="\n")
 
 
+def build_section_readme(section: str) -> None:
+    notes = section_notes(section)
+    readme = ROOT / "notes" / section / "README.md"
+    start_link = markdown_destination(readme, notes[0])
+    items = "\n".join(
+        f"{index}. [{note.stem}]({markdown_destination(readme, note)})"
+        for index, note in enumerate(notes, start=1)
+    )
+    result = f"""# {section}
+
+<!-- SECTION-NAV:START -->
+[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →]({start_link})
+
+Заметок в разделе: **{len(notes)}**
+<!-- SECTION-NAV:END -->
+
+## Карта раздела
+
+{SECTION_DESCRIPTIONS[section]}
+
+## Последовательность материалов
+
+{items}
+"""
+    readme.parent.mkdir(parents=True, exist_ok=True)
+    readme.write_text(result, encoding="utf-8", newline="\n")
+
+
 def main() -> None:
     for source, output_file in PILOTS.items():
         build_note(source, output_file)
         print(f"Built {output_file.relative_to(ROOT)}")
+    for section in SECTION_DESCRIPTIONS:
+        build_section_readme(section)
+        print(f"Built notes/{section}/README.md")
 
 
 if __name__ == "__main__":
