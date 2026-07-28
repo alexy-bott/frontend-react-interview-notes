@@ -1,0 +1,116 @@
+---
+aliases:
+  - async UI testing
+  - form error testing
+  - auth flow testing
+  - API integration tests
+  - testing async forms
+---
+
+#### Ответ на 60 секунд
+
+Async UI тестируют вокруг пользовательского результата: что видно на экране во время запроса, после успеха, после ошибки, после server validation, после `401/403`, после debounce или retry. В React это обычно integration-тест: компонент рендерится через Testing Library, пользовательские действия выполняются через `userEvent`, сеть контролируется через MSW, результат ждётся через `findBy...` или `waitFor`.
+
+Смысл такого теста - проверить реальный flow приложения: компонент вызывает HTTP-клиент, API возвращает success/error, state обновляется, UI показывает правильное состояние. Поэтому для API-сценариев чаще мокают HTTP boundary, а не внутренний hook или функцию клиента. Для debounce, retry delay и delayed loading используют fake timers или контролируемую задержку, но таймеры обязательно очищают после теста.
+
+Хороший набор async-проверок включает loading, success, empty state, server error, field errors формы, disabled submit, повторную отправку, `401 -> refresh -> retry`, `403 -> access denied`, отмену устаревшего запроса и отсутствие race condition, когда старый response перетирает новый.
+
+#### Ключевая схема
+
+```text
+render UI
+-> userEvent action
+-> MSW HTTP response / fake timers
+-> await visible state
+-> assert business result
+```
+
+| Сценарий | Что проверять | Инструмент |
+| --- | --- | --- |
+| loading | loader, disabled submit, skeleton | RTL + MSW delay |
+| success | данные отрисованы, form reset, redirect | RTL + MSW |
+| empty state | пустой список, понятный fallback | RTL + MSW |
+| `422` | ошибки привязаны к полям | RTL + MSW |
+| `401` | refresh, retry original request, logout при провале | RTL/MSW или API-client test |
+| `403` | доступ запрещён без refresh-loop | RTL/MSW |
+| debounce validation | запрос после паузы, отмена старого результата | Jest fake timers |
+| retry | число попыток, финальное состояние | fake timers + MSW |
+
+#### Развернутый ответ
+
+Async UI ломается не только из-за неправильного запроса. Частые причины регрессий: loader не исчез, кнопка остаётся disabled, server error потерялся, `422` не попал в поле формы, `401` ушёл в бесконечный refresh-loop, устаревший response перезаписал свежие данные, retry сработал слишком много раз, optimistic update не откатился после ошибки.
+
+Integration-тест покрывает эту связку на уровне поведения. Он не проверяет `setState`, название hook-а или private function. Он проверяет наблюдаемый контракт: пользователь нажал кнопку, увидел pending state, получил сообщение об ошибке или успешный результат. Если компонент использует `fetch`, RTK Query, React Query или свой API-клиент, MSW перехватывает запрос на сетевой границе и возвращает контролируемый HTTP response.
+
+Для форм разделяют client validation и server validation. Client validation можно проверить без сети: required field, format, min/max length. Server validation проверяется через ответ API, обычно `422` с объектом ошибок. UI должен показать ошибку рядом с нужным полем, сохранить введённые данные и вернуть submit в доступное состояние. Общая ошибка сервера идёт в form-level alert, а не в случайное поле.
+
+Auth flow проверяют как протокол состояния, а не как набор внутренних вызовов. При `401` приложение может один раз выполнить refresh и повторить исходный запрос. Если refresh успешен, пользователь видит исходный результат. Если refresh неуспешен, пользователь выходит из сессии или попадает на login. `403` означает, что пользователь известен, но прав не хватает; этот сценарий не должен запускать бесконечный refresh.
+
+Fake timers нужны для debounce, throttle, retry delay, delayed validation и polling. При сочетании fake timers с `userEvent` важно синхронизировать продвижение времени и возвращать real timers после теста. Иначе таймеры, pending callbacks и microtasks могут протечь в соседние проверки и создать flaky suite.
+
+> [!faq]+ Уточнения
+> - `findBy...` используют, когда элемент должен появиться после async-операции.
+> - `queryBy...` подходит для проверки исчезновения или отсутствия.
+> - `waitFor` нужен для условия, которое не выражается одним `findBy`.
+> - MSW handlers сбрасывают после каждого теста через `resetHandlers()`.
+> - `401` и `403` тестируют разными сценариями, потому что это разные продуктовые реакции.
+> - Для race condition проверяют, что поздний старый response не перетирает новый результат.
+
+#### Пример
+
+```tsx
+import { http, HttpResponse } from "msw";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+test("shows server field error after submit", async () => {
+  const user = userEvent.setup();
+
+  server.use(
+    http.post("/api/profile", () => {
+      return HttpResponse.json(
+        { errors: { email: "Email already exists" } },
+        { status: 422 },
+      );
+    }),
+  );
+
+  render(<ProfileForm />);
+
+  await user.type(screen.getByLabelText(/email/i), "taken@example.com");
+  await user.click(screen.getByRole("button", { name: /save/i }));
+
+  expect(await screen.findByText(/email already exists/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /save/i })).toBeEnabled();
+});
+```
+
+#### Частые ошибки
+
+- Проверять вызов внутреннего hook-а вместо результата в UI.
+- Использовать `getBy...` для элемента, который появляется после запроса.
+- Забывать `await` перед `userEvent` и async assertions.
+- Не проверять loading, empty и error states.
+- Смешивать `401` и `403` в один сценарий.
+- Не сбрасывать MSW handlers, timers, storage и query cache между тестами.
+- Делать fake timers без возврата к real timers.
+- Проверять только happy path формы и не покрывать `422`.
+
+#### Связанные темы
+
+- [[Конспект для подготовки/Testing/Jest]]
+- [[Конспект для подготовки/Testing/React Testing Library]]
+- [[Конспект для подготовки/Testing/MSW и моки API]]
+- [[Конспект для подготовки/Testing/Flaky tests]]
+- [[Конспект для подготовки/Forms/Server errors и async validation]]
+- [[Конспект для подготовки/Forms/React Hook Form]]
+- [[Конспект для подготовки/Web Basics/Auth flow и refresh tokens]]
+- [[Конспект для подготовки/Web Basics/HTTP status codes и ошибки API]]
+- [[Конспект для подготовки/React/RTK Query]]
+
+#### Источники
+
+- [Testing Library: About Queries](https://testing-library.com/docs/queries/about/)
+- [Testing Library: Using Fake Timers](https://testing-library.com/docs/using-fake-timers/)
+- [Jest: Timer Mocks](https://jestjs.io/docs/timer-mocks)
+- [MSW documentation](https://mswjs.io/docs/)
