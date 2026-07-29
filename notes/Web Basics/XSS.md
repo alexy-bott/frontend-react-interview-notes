@@ -179,8 +179,8 @@ Trusted Types позволяют потребовать, чтобы опасны
 - [CSP и security headers](<./CSP и security headers.md>)
 - [Cookies и авторизация](<./Cookies и авторизация.md>)
 - [Хранение данных в браузере](<./Хранение данных в браузере.md>)
-- [Frontend threat model](<../../Конспект для подготовки/Security/Frontend threat model.md>)
-- [Token storage XSS CSRF tradeoffs](<../../Конспект для подготовки/Security/Token storage XSS CSRF tradeoffs.md>)
+- [Frontend threat model](<../Security/Frontend threat model.md>)
+- [Token storage XSS CSRF tradeoffs](<../Security/Token storage XSS CSRF tradeoffs.md>)
 
 ## Источники
 

@@ -49,6 +49,9 @@ def internal_targets(file: Path, text: str) -> list[Path]:
 def main() -> int:
     errors: list[str] = []
     notes = sorted(path for path in NOTES_ROOT.rglob("*.md") if path.name != "README.md")
+    note_set = {note.resolve() for note in notes}
+    related_inbound = {note.resolve(): 0 for note in notes}
+
     if not (ROOT / "README.md").exists():
         errors.append("README.md is missing")
     if not notes:
@@ -101,7 +104,14 @@ def main() -> int:
                 errors.append(f"{relative}: duplicate related topic")
             if note.resolve() in related_targets:
                 errors.append(f"{relative}: related topics contain a self-link")
+            for target in related_targets:
+                if target in note_set and target != note.resolve():
+                    related_inbound[target] += 1
         check_links(note, text, errors)
+
+    for note in notes:
+        if related_inbound[note.resolve()] == 0:
+            errors.append(f"{note.relative_to(ROOT)}: no incoming related-topic link")
 
     section_readmes = sorted(NOTES_ROOT.rglob("README.md"))
     for readme in section_readmes:

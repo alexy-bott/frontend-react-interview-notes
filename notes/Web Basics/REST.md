@@ -147,7 +147,7 @@ Frontend опирается на предсказуемый контракт: UR
 - [API pagination filtering sorting](<./API pagination filtering sorting.md>)
 - [HTTP caching](<./HTTP caching.md>)
 - [OpenAPI и Swagger](<./OpenAPI и Swagger.md>)
-- [API слой и контракты](<../../Конспект для подготовки/Architecture/API слой и контракты.md>)
+- [API слой и контракты](<../Architecture/API слой и контракты.md>)
 
 ## Источники
 

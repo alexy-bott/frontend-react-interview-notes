@@ -211,7 +211,7 @@ async function fetchJson<T>(
 - [HTTP status codes и ошибки API](<../Web Basics/HTTP status codes и ошибки API.md>)
 - [CORS](<../Web Basics/CORS.md>)
 - [Cookies и авторизация](<../Web Basics/Cookies и авторизация.md>)
-- [Проверка данных с backend](<../../Конспект для подготовки/TypeScript/Проверка данных с backend.md>)
+- [Проверка данных с backend](<../TypeScript/Проверка данных с backend.md>)
 
 ## Источники
 

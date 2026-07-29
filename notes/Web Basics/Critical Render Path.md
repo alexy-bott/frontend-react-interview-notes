@@ -161,7 +161,7 @@ Lighthouse помогает найти кандидатов, но waterfall и P
 - [Core Web Vitals](<./Core Web Vitals.md>)
 - [async и defer](<../JavaScript/async и defer.md>)
 - [Bundlers и code splitting](<./Bundlers и code splitting.md>)
-- [Hydration](<../../Конспект для подготовки/React/Hydration.md>)
+- [Hydration](<../React/Hydration.md>)
 
 ## Источники
 

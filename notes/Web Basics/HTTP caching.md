@@ -172,7 +172,7 @@ Hard reload полезен для диагностики конкретного 
 - [Bundlers и code splitting](<./Bundlers и code splitting.md>)
 - [Service Workers и PWA](<./Service Workers и PWA.md>)
 - [Page lifecycle visibility и background tabs](<../Browser Internals/Page lifecycle visibility и background tabs.md>)
-- [RTK Query](<../../Конспект для подготовки/React/RTK Query.md>)
+- [RTK Query](<../React/RTK Query.md>)
 
 ## Источники
 

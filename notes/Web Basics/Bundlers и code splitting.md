@@ -190,15 +190,15 @@ SSR-проект имеет как минимум server и client graphs. Мо�
 
 ## Связанные темы
 
-- [Bundle size и loading strategy](<../../Конспект для подготовки/Performance/Bundle size и loading strategy.md>)
+- [Bundle size и loading strategy](<../Performance/Bundle size и loading strategy.md>)
 - [HTTP caching](<./HTTP caching.md>)
 - [ES modules](<../JavaScript/ES modules.md>)
-- [Vite](<../../Конспект для подготовки/Tooling/Vite.md>)
-- [Webpack](<../../Конспект для подготовки/Tooling/Webpack.md>)
-- [Build config и production сборка](<../../Конспект для подготовки/Tooling/Build config и production сборка.md>)
-- [Bundle analysis и size budgets](<../../Конспект для подготовки/Tooling/Bundle analysis и size budgets.md>)
-- [Suspense и lazy](<../../Конспект для подготовки/React/Suspense и lazy.md>)
-- [SSR и SSG](<../../Конспект для подготовки/React/SSR и SSG.md>)
+- [Vite](<../Tooling/Vite.md>)
+- [Webpack](<../Tooling/Webpack.md>)
+- [Build config и production сборка](<../Tooling/Build config и production сборка.md>)
+- [Bundle analysis и size budgets](<../Tooling/Bundle analysis и size budgets.md>)
+- [Suspense и lazy](<../React/Suspense и lazy.md>)
+- [SSR и SSG](<../React/SSR и SSG.md>)
 
 ## Источники
 

@@ -151,7 +151,7 @@ Frontend скрывает запрещённую кнопку для хорош�
 - [CORS](<./CORS.md>)
 - [HTTP vs HTTPS](<./HTTP vs HTTPS.md>)
 - [Хранение данных в браузере](<./Хранение данных в браузере.md>)
-- [Token storage XSS CSRF tradeoffs](<../../Конспект для подготовки/Security/Token storage XSS CSRF tradeoffs.md>)
+- [Token storage XSS CSRF tradeoffs](<../Security/Token storage XSS CSRF tradeoffs.md>)
 
 ## Источники
 

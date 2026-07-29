@@ -1,0 +1,102 @@
+# State management
+
+<!-- NOTE-NAV-TOP:START -->
+[← FSD](<./FSD.md>) · [↑ Architecture](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [API слой и контракты →](<./API слой и контракты.md>)
+<!-- NOTE-NAV-TOP:END -->
+
+## Быстрый ответ
+
+Управление состоянием определяет владельца, источник истины, допустимые переходы и consumers каждого изменяемого значения. Сначала state классифицируют как локальное UI-состояние, URL state, form draft, server state или глобальное client state; только затем выбирают `useState`, reducer, Context, Redux Toolkit, Zustand или query library.
+
+State размещают у ближайшего владельца, которому нужно им управлять. Server data остаются в query/cache layer со свежестью и invalidation, shareable filters - в URL, ввод формы - у формы. Глобальный store нужен данным и transitions, которые действительно разделяют независимые части приложения; он не должен дублировать другие источники истины.
+
+## Ключевая схема
+
+| Вид | Источник истины | Типичный owner |
+| --- | --- | --- |
+| Local UI | текущий component subtree | component/reducer |
+| URL | адрес текущего представления | router/search params |
+| Form draft | незавершённый ввод | form controller/library |
+| Server state | backend | query/cache layer |
+| Global client | browser-приложение | Redux/Zustand/external store |
+| Derived state | вычисляется из других данных | selector/computed value, не отдельная копия |
+
+## Базовая модель
+
+Для каждого state задают четыре вопроса: кто его создаёт, кто меняет, сколько он живёт и должен ли переживать reload/открываться по ссылке. Эти ответы важнее количества consumers. Значение, используемое в двух соседних компонентах, можно поднять к их общему parent; для этого не нужен app-wide store.
+
+Server state отличается тем, что frontend не является его окончательным владельцем. Cache хранит snapshot, который может устареть; запросы имеют loading/error, deduplication, cancellation и refetch. Копирование ответа в client store требует вручную синхронизировать две модели.
+
+Состояние должно быть минимальным. Отфильтрованный список вычисляют из исходных items и filter, `isEmpty` - из length, а не обновляют параллельными setters. Иначе один transition может изменить source и забыть обновить копию.
+
+## Развернутый ответ
+
+**Local state и reducer.** `useState` подходит независимому значению. Reducer полезен для нескольких связанных полей и событий, когда нужно сделать transitions явными и исключить невозможные комбинации. Он не становится global только из-за сложности.
+
+**Context.** Context передаёт значение через дерево, но не определяет модель transitions и cache. Все consumers конкретного context реагируют на изменение `value` по `Object.is`; для часто изменяемых независимых данных contexts разделяют либо используют external store с selectors.
+
+**Redux Toolkit и Zustand.** Redux Toolkit полезен для событийной модели, middleware, traceability и согласованных team conventions. Zustand даёт компактный external store и selector subscriptions. Выбор зависит от transitions, debugging, ecosystem и командной поддержки, а не от размера названия библиотеки.
+
+**URL state.** Search params хранят состояние представления, которое должно переживать reload, Back/Forward и copy link. Значения URL являются внешним строковым вводом: их парсят, валидируют, задают defaults и сериализуют канонически.
+
+**Form state.** Draft, touched/dirty, client errors и submit lifecycle имеют собственную частоту updates. Перенос каждого keypress в global store обычно расширяет область подписок; shared wizard state поднимают только до владельца всего процесса и отделяют от сохранённой server entity.
+
+**Persistence.** `localStorage` не превращает state в надёжную database. Схема persisted data меняется между releases, данные могут устареть или содержать чувствительную информацию. Нужны version/migration, validation, expiry и безопасный fallback.
+
+## Пример
+
+```tsx
+function UsersPage() {
+  const [params, setParams] = useSearchParams();
+  const [isHelpOpen, setHelpOpen] = useState(false);
+
+  const page = Math.max(1, Number(params.get("page")) || 1);
+  const status = parseUserStatus(params.get("status"));
+
+  const usersQuery = useUsersQuery({ page, status });
+
+  return (
+    <UsersView
+      users={usersQuery.data?.items ?? []}
+      isLoading={usersQuery.isLoading}
+      isHelpOpen={isHelpOpen}
+      onHelpOpenChange={setHelpOpen}
+      onParamsChange={setParams}
+    />
+  );
+}
+```
+
+Параметры результата принадлежат URL, server snapshot - query cache, а временное открытие help - странице. Ни один из этих owners не требует копировать все значения в общий store.
+
+## Ключевые уточнения
+
+- «Один источник истины» означает одного владельца конкретного смысла, а не один store для всего приложения.
+- Context является способом передачи значения, а transitions, selectors и persistence нужно спроектировать отдельно.
+- Query cache хранит server snapshot; дублирование тех же entities в client store требует явной причины и synchronization policy.
+- Derived state вычисляют из минимальных sources, чтобы не поддерживать согласованность вручную.
+- Persistence меняет lifecycle и security state, поэтому требует validation, migration и expiry.
+
+## Связанные темы
+
+- [Состояние в React](<../React/Состояние в React.md>)
+- [Context](<../React/Context.md>)
+- [Redux Toolkit](<../React/Redux Toolkit.md>)
+- [RTK Query](<../React/RTK Query.md>)
+- [Zustand](<../React/Zustand.md>)
+- [Server state и React Query](<../React/Server state и React Query.md>)
+- [API слой и контракты](<./API слой и контракты.md>)
+
+## Источники
+
+- [React: Choosing the State Structure](https://react.dev/learn/choosing-the-state-structure)
+- [Redux: Style Guide](https://redux.js.org/style-guide/)
+- [RTK Query: Overview](https://redux-toolkit.js.org/rtk-query/overview)
+- [TanStack Query: Overview](https://tanstack.com/query/latest/docs/framework/react/overview)
+- [Zustand: Documentation](https://zustand.docs.pmnd.rs/)
+
+---
+
+<!-- NOTE-NAV-BOTTOM:START -->
+[← FSD](<./FSD.md>) · [↑ Architecture](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [API слой и контракты →](<./API слой и контракты.md>)
+<!-- NOTE-NAV-BOTTOM:END -->

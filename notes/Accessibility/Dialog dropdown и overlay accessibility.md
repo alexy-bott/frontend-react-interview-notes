@@ -125,9 +125,9 @@ Radix управляет большей частью ролей, клавиш и
 
 ## Связанные темы
 
-- [Radix UI](<../../Конспект для подготовки/React/Radix UI.md>)
-- [Portal](<../../Конспект для подготовки/React/Portal.md>)
-- [Compound Components и Headless UI](<../../Конспект для подготовки/Patterns/Compound Components и Headless UI.md>)
+- [Radix UI](<../React/Radix UI.md>)
+- [Portal](<../React/Portal.md>)
+- [Compound Components и Headless UI](<../Patterns/Compound Components и Headless UI.md>)
 - [Keyboard navigation и focus management](<./Keyboard navigation и focus management.md>)
 - [Event delegation capture bubble](<../Browser Internals/Event delegation capture bubble.md>)
 

@@ -203,7 +203,7 @@ controller.abort();
 - [CustomEvent EventTarget dispatchEvent](<./CustomEvent EventTarget dispatchEvent.md>)
 - [DOM API innerHTML и layout](<./DOM API innerHTML и layout.md>)
 - [AbortController](<./AbortController.md>)
-- [Как работает React](<../../Конспект для подготовки/React/Как работает React.md>)
+- [Как работает React](<../React/Как работает React.md>)
 - [Critical Render Path](<../Web Basics/Critical Render Path.md>)
 
 ## Источники

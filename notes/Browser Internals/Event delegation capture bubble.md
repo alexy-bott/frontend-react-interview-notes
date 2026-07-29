@@ -184,8 +184,8 @@ React предоставляет обёртку `SyntheticEvent` и исполь
 - [Архитектура браузера процессы и потоки](<./Архитектура браузера процессы и потоки.md>)
 - [Main thread long tasks и responsiveness](<./Main thread long tasks и responsiveness.md>)
 - [DOM events](<../JavaScript/DOM events.md>)
-- [Portal](<../../Конспект для подготовки/React/Portal.md>)
-- [Radix UI](<../../Конспект для подготовки/React/Radix UI.md>)
+- [Portal](<../React/Portal.md>)
+- [Radix UI](<../React/Radix UI.md>)
 
 ## Источники
 

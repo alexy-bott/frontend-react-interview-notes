@@ -175,8 +175,8 @@ Concurrent rendering в React 18 позволяет планировать и п
 - [requestAnimationFrame и requestIdleCallback](<../JavaScript/requestAnimationFrame и requestIdleCallback.md>)
 - [Web Workers](<../Web Basics/Web Workers.md>)
 - [Core Web Vitals](<../Web Basics/Core Web Vitals.md>)
-- [useTransition и useDeferredValue](<../../Конспект для подготовки/React/useTransition и useDeferredValue.md>)
-- [Как работает React](<../../Конспект для подготовки/React/Как работает React.md>)
+- [useTransition и useDeferredValue](<../React/useTransition и useDeferredValue.md>)
+- [Как работает React](<../React/Как работает React.md>)
 
 ## Источники
 

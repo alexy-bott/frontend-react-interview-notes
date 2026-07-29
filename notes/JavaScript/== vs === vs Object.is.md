@@ -98,8 +98,8 @@ first === second; // false
 - [Приведение типов](<./Приведение типов.md>)
 - [Map Set WeakMap WeakSet](<./Map Set WeakMap WeakSet.md>)
 - [Autoboxing](<./Autoboxing.md>)
-- [never any unknown](<../../Конспект для подготовки/TypeScript/never any unknown.md>)
-- [Проверка данных с backend](<../../Конспект для подготовки/TypeScript/Проверка данных с backend.md>)
+- [never any unknown](<../TypeScript/never any unknown.md>)
+- [Проверка данных с backend](<../TypeScript/Проверка данных с backend.md>)
 
 ## Источники
 

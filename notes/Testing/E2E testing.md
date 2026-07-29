@@ -1,0 +1,90 @@
+# E2E testing
+
+<!-- NOTE-NAV-TOP:START -->
+[← Async UI формы и auth](<./Async UI формы и auth.md>) · [↑ Testing](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Flaky tests →](<./Flaky tests.md>)
+<!-- NOTE-NAV-TOP:END -->
+
+## Быстрый ответ
+
+E2E test запускает приложение в real browser и проверяет ценный пользовательский flow через UI, routing, storage, network и test backend. Он даёт наиболее широкую уверенность, но только для реально подключённых boundaries: если endpoint перехвачен через `page.route`, frontend branch проверен, а интеграция с этим backend endpoint — нет.
+
+Для E2E выбирают небольшое число критичных flows: login, checkout, создание сущности, изменение прав, восстановление после ошибки, основной happy path продукта. Проверки маленьких состояний компонентов дешевле держать в integration-тестах. Стабильный E2E использует locators по role/text/test id, контролируемые test data, изолированное состояние и понятную очистку.
+
+Playwright и Cypress решают похожую задачу: запускают браузер, управляют страницей и дают assertions. Playwright часто выбирают за автожидания, поддержку нескольких браузеров и удобную работу с contexts. Важно не название инструмента, а дисциплина: независимые тесты, предсказуемые данные, минимум sleep, диагностика через trace/video/screenshot и запуск в CI.
+
+## Ключевая схема
+
+```text
+real browser
+-> user flow
+-> app + routing + network + storage
+-> assert visible business result
+```
+
+| Проверять в E2E | Не переносить в E2E |
+| --- | --- |
+| критичный пользовательский путь | каждую ветку маленького компонента |
+| интеграцию frontend/backend | private function |
+| routing/auth/permissions | все варианты formatter-а |
+| smoke после деплоя | внутренний state |
+| payment/order/login flow | мелкий CSS-класс |
+
+## Базовая модель
+
+E2E проверяет приложение в наиболее близком к пользователю окружении: браузер, routing, storage, network, cookies, permissions и backend-контракт. Поэтому он даёт высокую уверенность, но стоит дороже. Стратегия E2E должна быть узкой: smoke, критичные business flows, auth/permissions, checkout/order, создание и сохранение ключевых сущностей.
+
+Playwright создаёт отдельный BrowserContext для каждого test, изолируя cookies/storage на browser side. Database, queues, mailboxes и external services этим не изолируются: test data получают unique IDs/tenant/user и очищают через API/fixtures.
+
+## Развернутый ответ
+
+Locators выбирают по пользовательскому смыслу: role, accessible name, label, text. `data-testid` полезен для технически сложных мест, где пользовательский селектор нестабилен или отсутствует, но он не должен заменять семантику везде.
+
+Test data должны быть контролируемыми. Тест сам готовит данные через API/fixtures/seed или работает с известным окружением. Зависимость от результата предыдущего теста делает suite хрупким, особенно при параллельном запуске.
+
+Network можно проверять через тестовый backend или перехватывать на уровне E2E-инструмента. Реальный backend-контракт полезен для smoke/acceptance сценариев. Routing/mocks удобны для редких ошибок, отказов интеграций и состояний, которые сложно стабильно подготовить в backend.
+
+Flaky в E2E часто появляется из-за `sleep`, гонок, общего состояния, анимаций, нестабильной сети и неочищенных данных. Тест ждёт конкретное состояние: visible heading, enabled button, URL, response, toast, исчезновение loader. Trace/video/screenshot помогают быстро понять, где путь сломался.
+
+Playwright locators выполняют actionability checks, а web-first assertions retry-ят до ожидаемого состояния. Это не означает, что любой timeout нужно увеличить: ожидание должно выражать конкретный user-visible contract. Trace обычно сохраняют на first retry в CI, чтобы получить диагностику без стоимости trace для каждого успешного test.
+
+## Пример Playwright
+
+```ts
+import { expect, test } from "@playwright/test";
+
+test("user can log in", async ({ page }) => {
+  await page.goto("/login");
+
+  await page.getByLabel("Email").fill("user@example.com");
+  await page.getByLabel("Password").fill("secret");
+  await page.getByRole("button", { name: /sign in/i }).click();
+
+  await expect(page.getByRole("heading", { name: /dashboard/i })).toBeVisible();
+});
+```
+
+## Ключевые уточнения
+
+- E2E подтверждает только boundaries, которые действительно участвуют в run; network interception сужает его до browser/frontend scenario.
+- Locator по role/name или явному test id является стабильным contract; CSS/XPath по структуре DOM обычно нет.
+- Auto-waiting проверяет actionability, web-first assertion — ожидаемый result; fixed sleep не нужен.
+- BrowserContext изолирует browser state, но shared backend data требует отдельной стратегии.
+- Test сам создаёт preconditions через fixture/API и не зависит от порядка других tests.
+- Trace на first retry, screenshot/video/logs сохраняют контекст failure; retries не заменяют устранение причины.
+
+## Связанные темы
+
+- [Стратегия тестирования frontend](<./Стратегия тестирования frontend.md>)
+- [Flaky tests](<./Flaky tests.md>)
+- [Accessibility](<../HTML/Accessibility.md>)
+- [Cookies и авторизация](<../Web Basics/Cookies и авторизация.md>)
+
+## Источники
+
+- [Playwright documentation](https://playwright.dev/docs/intro)
+
+---
+
+<!-- NOTE-NAV-BOTTOM:START -->
+[← Async UI формы и auth](<./Async UI формы и auth.md>) · [↑ Testing](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Flaky tests →](<./Flaky tests.md>)
+<!-- NOTE-NAV-BOTTOM:END -->

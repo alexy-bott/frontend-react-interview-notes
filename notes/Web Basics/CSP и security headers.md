@@ -142,8 +142,8 @@ Content-Security-Policy:
 - [CSRF](<./CSRF.md>)
 - [HTTP vs HTTPS](<./HTTP vs HTTPS.md>)
 - [OWASP Top 10](<./OWASP Top 10.md>)
-- [CORS CSP и browser security boundaries](<../../Конспект для подготовки/Security/CORS CSP и browser security boundaries.md>)
-- [Supply chain secrets и third-party scripts](<../../Конспект для подготовки/Security/Supply chain secrets и third-party scripts.md>)
+- [CORS CSP и browser security boundaries](<../Security/CORS CSP и browser security boundaries.md>)
+- [Supply chain secrets и third-party scripts](<../Security/Supply chain secrets и third-party scripts.md>)
 
 ## Источники
 

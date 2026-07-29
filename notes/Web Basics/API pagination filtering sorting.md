@@ -160,10 +160,10 @@ const usersQueryKey = [
 - [REST](<./REST.md>)
 - [HTTP запрос](<./HTTP запрос.md>)
 - [OpenAPI и Swagger](<./OpenAPI и Swagger.md>)
-- [API слой и контракты](<../../Конспект для подготовки/Architecture/API слой и контракты.md>)
-- [Таблица с фильтрами сортировкой и пагинацией](<../../Конспект для подготовки/Frontend System Design/Таблица с фильтрами сортировкой и пагинацией.md>)
+- [API слой и контракты](<../Architecture/API слой и контракты.md>)
+- [Таблица с фильтрами сортировкой и пагинацией](<../Frontend System Design/Таблица с фильтрами сортировкой и пагинацией.md>)
 - [AbortController](<../JavaScript/AbortController.md>)
-- [RTK Query](<../../Конспект для подготовки/React/RTK Query.md>)
+- [RTK Query](<../React/RTK Query.md>)
 
 ## Источники
 

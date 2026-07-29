@@ -44,7 +44,7 @@
 - [CSP и security headers](<./CSP и security headers.md>)
 - [OWASP Top 10](<./OWASP Top 10.md>)
 
-Общая модель угроз и хранение token глубже разобраны в [Frontend threat model](<../../Конспект для подготовки/Security/Frontend threat model.md>) и [Token storage XSS CSRF tradeoffs](<../../Конспект для подготовки/Security/Token storage XSS CSRF tradeoffs.md>).
+Общая модель угроз и хранение token глубже разобраны в [Frontend threat model](<../Security/Frontend threat model.md>) и [Token storage XSS CSRF tradeoffs](<../Security/Token storage XSS CSRF tradeoffs.md>).
 
 ### 6. Доставка и производительность приложения
 

@@ -72,7 +72,7 @@ Frontend начинает с нативного семантического HTM
 - [Keyboard navigation и focus management](<../Accessibility/Keyboard navigation и focus management.md>)
 - [Dialog dropdown и overlay accessibility](<../Accessibility/Dialog dropdown и overlay accessibility.md>)
 - [Forms errors и accessibility](<../Accessibility/Forms errors и accessibility.md>)
-- [Radix UI](<../../Конспект для подготовки/React/Radix UI.md>)
+- [Radix UI](<../React/Radix UI.md>)
 
 ## Источники
 

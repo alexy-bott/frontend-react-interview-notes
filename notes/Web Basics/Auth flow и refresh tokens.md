@@ -225,7 +225,7 @@ CORS управляет чтением ответа JavaScript-кодом. Он 
 - [XSS](<./XSS.md>)
 - [Fetch и работа с API](<../JavaScript/Fetch и работа с API.md>)
 - [postMessage и BroadcastChannel](<../JavaScript/postMessage и BroadcastChannel.md>)
-- [Auth flow и protected routes](<../../Конспект для подготовки/Frontend System Design/Auth flow и protected routes.md>)
+- [Auth flow и protected routes](<../Frontend System Design/Auth flow и protected routes.md>)
 
 ## Источники
 

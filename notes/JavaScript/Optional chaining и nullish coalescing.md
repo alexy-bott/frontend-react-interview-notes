@@ -193,8 +193,8 @@ const userName = response?.user?.name ?? "Anonymous";
 
 - [Приведение типов](<./Приведение типов.md>)
 - [Проверка свойств объекта](<./Проверка свойств объекта.md>)
-- [never any unknown](<../../Конспект для подготовки/TypeScript/never any unknown.md>)
-- [Проверка данных с backend](<../../Конспект для подготовки/TypeScript/Проверка данных с backend.md>)
+- [never any unknown](<../TypeScript/never any unknown.md>)
+- [Проверка данных с backend](<../TypeScript/Проверка данных с backend.md>)
 
 ## Источники
 

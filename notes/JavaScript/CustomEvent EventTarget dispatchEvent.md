@@ -188,7 +188,7 @@ this.dispatchEvent(new CustomEvent("value-change", {
 
 - [DOM events](<./DOM events.md>)
 - [postMessage и BroadcastChannel](<./postMessage и BroadcastChannel.md>)
-- [Observer PubSub и события](<../../Конспект для подготовки/Patterns/Observer PubSub и события.md>)
+- [Observer PubSub и события](<../Patterns/Observer PubSub и события.md>)
 - [AbortController](<./AbortController.md>)
 
 ## Источники

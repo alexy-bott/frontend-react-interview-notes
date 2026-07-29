@@ -245,7 +245,7 @@ const user = parseUser(data);
 - [Date и Intl](<./Date и Intl.md>)
 - [Fetch и работа с API](<./Fetch и работа с API.md>)
 - [Обработка ошибок](<./Обработка ошибок.md>)
-- [Проверка данных с backend](<../../Конспект для подготовки/TypeScript/Проверка данных с backend.md>)
+- [Проверка данных с backend](<../TypeScript/Проверка данных с backend.md>)
 - [Хранение данных в браузере](<../Web Basics/Хранение данных в браузере.md>)
 - [XSS](<../Web Basics/XSS.md>)
 

@@ -137,7 +137,7 @@ ARIA не должна противоречить нативной семант�
 
 - [Accessibility](<../HTML/Accessibility.md>)
 - [Семантическая верстка](<../HTML/Семантическая верстка.md>)
-- [Controlled uncontrolled и FormData](<../../Конспект для подготовки/Forms/Controlled uncontrolled и FormData.md>)
+- [Controlled uncontrolled и FormData](<../Forms/Controlled uncontrolled и FormData.md>)
 - [Keyboard navigation и focus management](<./Keyboard navigation и focus management.md>)
 - [Dialog dropdown и overlay accessibility](<./Dialog dropdown и overlay accessibility.md>)
 

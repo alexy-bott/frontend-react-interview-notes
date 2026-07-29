@@ -251,7 +251,7 @@ Debounced- или throttled-обёртка хранит таймер и посл
 - [AbortController](<./AbortController.md>)
 - [requestAnimationFrame и requestIdleCallback](<./requestAnimationFrame и requestIdleCallback.md>)
 - [Функции](<./Функции.md>)
-- [useCallback](<../../Конспект для подготовки/React/useCallback.md>)
+- [useCallback](<../React/useCallback.md>)
 
 ## Источники
 

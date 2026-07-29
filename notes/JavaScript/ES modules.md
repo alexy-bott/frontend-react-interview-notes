@@ -235,7 +235,7 @@ ESM сам по себе ничего не удаляет. Результат з
 - [Hoisting и TDZ](<./Hoisting и TDZ.md>)
 - [Promise](<./Promise.md>)
 - [Bundlers и code splitting](<../Web Basics/Bundlers и code splitting.md>)
-- [Suspense и lazy](<../../Конспект для подготовки/React/Suspense и lazy.md>)
+- [Suspense и lazy](<../React/Suspense и lazy.md>)
 
 ## Источники
 

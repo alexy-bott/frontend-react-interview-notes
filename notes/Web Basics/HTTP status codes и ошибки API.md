@@ -159,7 +159,7 @@ Production-обёртка дополнительно обрабатывает `2
 - [REST](<./REST.md>)
 - [OpenAPI и Swagger](<./OpenAPI и Swagger.md>)
 - [Auth flow и refresh tokens](<./Auth flow и refresh tokens.md>)
-- [Server errors и async validation](<../../Конспект для подготовки/Forms/Server errors и async validation.md>)
+- [Server errors и async validation](<../Forms/Server errors и async validation.md>)
 - [Fetch и работа с API](<../JavaScript/Fetch и работа с API.md>)
 
 ## Источники

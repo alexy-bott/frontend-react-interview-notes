@@ -125,7 +125,7 @@ SCSS сочетается с BEM, но механическое вложение
 - [SCSS переменные mixins functions](<./SCSS переменные mixins functions.md>)
 - [Специфичность селекторов](<./Специфичность селекторов.md>)
 - [Каскад и наследование](<./Каскад и наследование.md>)
-- [Frontend architecture](<../../Конспект для подготовки/Architecture/Frontend architecture.md>)
+- [Frontend architecture](<../Architecture/Frontend architecture.md>)
 
 ## Источники
 

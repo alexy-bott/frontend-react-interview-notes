@@ -161,7 +161,7 @@ Dev proxy создаёт same-origin URL только локально и спо
 
 ## Связанные темы
 
-- [CORS CSP и browser security boundaries](<../../Конспект для подготовки/Security/CORS CSP и browser security boundaries.md>)
+- [CORS CSP и browser security boundaries](<../Security/CORS CSP и browser security boundaries.md>)
 - [CSRF](<./CSRF.md>)
 - [Cookies и авторизация](<./Cookies и авторизация.md>)
 - [Auth flow и refresh tokens](<./Auth flow и refresh tokens.md>)

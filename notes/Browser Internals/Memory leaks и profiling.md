@@ -165,8 +165,8 @@ useEffect(() => {
 - [Garbage collection](<../JavaScript/Garbage collection.md>)
 - [Замыкание](<../JavaScript/Замыкание.md>)
 - [Map Set WeakMap WeakSet](<../JavaScript/Map Set WeakMap WeakSet.md>)
-- [useEffect vs useLayoutEffect](<../../Конспект для подготовки/React/useEffect vs useLayoutEffect.md>)
-- [Lifecycle](<../../Конспект для подготовки/React/Lifecycle.md>)
+- [useEffect vs useLayoutEffect](<../React/useEffect vs useLayoutEffect.md>)
+- [Lifecycle](<../React/Lifecycle.md>)
 - [Page lifecycle visibility и background tabs](<./Page lifecycle visibility и background tabs.md>)
 
 ## Источники

@@ -174,13 +174,13 @@ socket.addEventListener("message", (event) => {
 
 - [WebSocket](<./WebSocket.md>)
 - [SSE](<./SSE.md>)
-- [Observer PubSub и события](<../../Конспект для подготовки/Patterns/Observer PubSub и события.md>)
-- [RTK Query](<../../Конспект для подготовки/React/RTK Query.md>)
-- [Server state и React Query](<../../Конспект для подготовки/React/Server state и React Query.md>)
+- [Observer PubSub и события](<../Patterns/Observer PubSub и события.md>)
+- [RTK Query](<../React/RTK Query.md>)
+- [Server state и React Query](<../React/Server state и React Query.md>)
 - [Debounce и throttle](<../JavaScript/Debounce и throttle.md>)
 - [Cookies и авторизация](<./Cookies и авторизация.md>)
-- [API слой и контракты](<../../Конспект для подготовки/Architecture/API слой и контракты.md>)
-- [Realtime экран](<../../Конспект для подготовки/Frontend System Design/Realtime экран.md>)
+- [API слой и контракты](<../Architecture/API слой и контракты.md>)
+- [Realtime экран](<../Frontend System Design/Realtime экран.md>)
 
 ## Источники
 

@@ -139,9 +139,9 @@ function EmailField({ error }: EmailFieldProps) {
 
 ## Связанные темы
 
-- [React Hook Form](<../../Конспект для подготовки/Forms/React Hook Form.md>)
-- [Server errors и async validation](<../../Конспект для подготовки/Forms/Server errors и async validation.md>)
-- [Controller и кастомные компоненты](<../../Конспект для подготовки/Forms/Controller и кастомные компоненты.md>)
+- [React Hook Form](<../Forms/React Hook Form.md>)
+- [Server errors и async validation](<../Forms/Server errors и async validation.md>)
+- [Controller и кастомные компоненты](<../Forms/Controller и кастомные компоненты.md>)
 - [Формы](<../HTML/Формы.md>)
 - [Semantics ARIA и accessible name](<./Semantics ARIA и accessible name.md>)
 - [Keyboard navigation и focus management](<./Keyboard navigation и focus management.md>)

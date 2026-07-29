@@ -167,7 +167,7 @@ Middleware удобен, но endpoint inventory проверяют отдель
 - [Auth flow и refresh tokens](<./Auth flow и refresh tokens.md>)
 - [CORS](<./CORS.md>)
 - [HTTP методы](<./HTTP методы.md>)
-- [Token storage XSS CSRF tradeoffs](<../../Конспект для подготовки/Security/Token storage XSS CSRF tradeoffs.md>)
+- [Token storage XSS CSRF tradeoffs](<../Security/Token storage XSS CSRF tradeoffs.md>)
 
 ## Источники
 

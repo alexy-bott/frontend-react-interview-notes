@@ -224,8 +224,8 @@ type Message =
 - [Web Workers](<../Web Basics/Web Workers.md>)
 - [ArrayBuffer TypedArray DataView](<./ArrayBuffer TypedArray DataView.md>)
 - [Копирование объектов](<./Копирование объектов.md>)
-- [CORS CSP и browser security boundaries](<../../Конспект для подготовки/Security/CORS CSP и browser security boundaries.md>)
-- [Observer PubSub и события](<../../Конспект для подготовки/Patterns/Observer PubSub и события.md>)
+- [CORS CSP и browser security boundaries](<../Security/CORS CSP и browser security boundaries.md>)
+- [Observer PubSub и события](<../Patterns/Observer PubSub и события.md>)
 
 ## Источники
 

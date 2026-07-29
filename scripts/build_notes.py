@@ -18,8 +18,25 @@ MIGRATED_SECTIONS = (
     "Accessibility",
     "CSS",
     "JavaScript",
+    "Algorithms",
     "Browser Internals",
+    "Performance",
+    "TypeScript",
+    "React",
+    "Next.js",
+    "Forms",
+    "Vue",
     "Web Basics",
+    "Security",
+    "Testing",
+    "Architecture",
+    "Frontend System Design",
+    "Principles",
+    "Patterns",
+    "DevOps",
+    "Git",
+    "Tooling",
+    "Workflow",
 )
 
 SECTION_GROUPS = (
@@ -174,6 +191,9 @@ def convert_body(text: str, current_source: Path, output_file: Path) -> str:
             output.append(line)
             index += 1
             continue
+
+        if in_fence and re.match(r"^(<<<<<<<|=======|>>>>>>>)", line):
+            line = f" {line}"
 
         if not in_fence and re.match(r"^>\s*\[!faq\][+-]?\s*", line):
             summary = re.sub(r"^>\s*\[!faq\][+-]?\s*", "", line).strip() or "Уточнения"

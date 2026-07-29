@@ -178,8 +178,8 @@ function process(node) {
 ## Связанные темы
 
 - [Garbage collection](<./Garbage collection.md>)
-- [Map Set Object и выбор структуры данных](<../../Конспект для подготовки/Algorithms/Map Set Object и выбор структуры данных.md>)
-- [Big O и сложность алгоритмов](<../../Конспект для подготовки/Algorithms/Big O и сложность алгоритмов.md>)
+- [Map Set Object и выбор структуры данных](<../Algorithms/Map Set Object и выбор структуры данных.md>)
+- [Big O и сложность алгоритмов](<../Algorithms/Big O и сложность алгоритмов.md>)
 - [== vs === vs Object.is](<./== vs === vs Object.is.md>)
 - [Проверка свойств объекта](<./Проверка свойств объекта.md>)
 

@@ -168,9 +168,9 @@ Frontend-телеметрия не должна содержать пароли,
 - [CSP и security headers](<./CSP и security headers.md>)
 - [Cookies и авторизация](<./Cookies и авторизация.md>)
 - [Auth flow и refresh tokens](<./Auth flow и refresh tokens.md>)
-- [Frontend threat model](<../../Конспект для подготовки/Security/Frontend threat model.md>)
-- [Supply chain secrets и third-party scripts](<../../Конспект для подготовки/Security/Supply chain secrets и third-party scripts.md>)
-- [Проверка данных с backend](<../../Конспект для подготовки/TypeScript/Проверка данных с backend.md>)
+- [Frontend threat model](<../Security/Frontend threat model.md>)
+- [Supply chain secrets и third-party scripts](<../Security/Supply chain secrets и third-party scripts.md>)
+- [Проверка данных с backend](<../TypeScript/Проверка данных с backend.md>)
 
 ## Источники
 

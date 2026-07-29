@@ -91,7 +91,7 @@ Font preload оправдан только если этот точный фай
 - [Critical Render Path](<../Web Basics/Critical Render Path.md>)
 - [Core Web Vitals](<../Web Basics/Core Web Vitals.md>)
 - [async и defer](<../JavaScript/async и defer.md>)
-- [SSR и SSG](<../../Конспект для подготовки/React/SSR и SSG.md>)
+- [SSR и SSG](<../React/SSR и SSG.md>)
 
 ## Источники
 

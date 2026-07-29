@@ -179,8 +179,8 @@ function mountDashboard() {
 - [Замыкание](<./Замыкание.md>)
 - [DOM events](<./DOM events.md>)
 - [AbortController](<./AbortController.md>)
-- [useEffect vs useLayoutEffect](<../../Конспект для подготовки/React/useEffect vs useLayoutEffect.md>)
-- [Lifecycle](<../../Конспект для подготовки/React/Lifecycle.md>)
+- [useEffect vs useLayoutEffect](<../React/useEffect vs useLayoutEffect.md>)
+- [Lifecycle](<../React/Lifecycle.md>)
 
 ## Источники
 

@@ -229,7 +229,7 @@ Abort - протокол отмены между вызывающим кодом
 - [Promise](<./Promise.md>)
 - [Promise combinators](<./Promise combinators.md>)
 - [Event Loop](<./Event Loop.md>)
-- [useEffect vs useLayoutEffect](<../../Конспект для подготовки/React/useEffect vs useLayoutEffect.md>)
+- [useEffect vs useLayoutEffect](<../React/useEffect vs useLayoutEffect.md>)
 
 ## Источники
 

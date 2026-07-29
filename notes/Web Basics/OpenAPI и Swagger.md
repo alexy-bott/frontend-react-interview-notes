@@ -203,9 +203,9 @@ TypeScript доверяет объявленному return type функции.
 - [REST](<./REST.md>)
 - [HTTP status codes и ошибки API](<./HTTP status codes и ошибки API.md>)
 - [API pagination filtering sorting](<./API pagination filtering sorting.md>)
-- [API слой и контракты](<../../Конспект для подготовки/Architecture/API слой и контракты.md>)
-- [Проверка данных с backend](<../../Конспект для подготовки/TypeScript/Проверка данных с backend.md>)
-- [RTK Query](<../../Конспект для подготовки/React/RTK Query.md>)
+- [API слой и контракты](<../Architecture/API слой и контракты.md>)
+- [Проверка данных с backend](<../TypeScript/Проверка данных с backend.md>)
+- [RTK Query](<../React/RTK Query.md>)
 
 ## Источники
 

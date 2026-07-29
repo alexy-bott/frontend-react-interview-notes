@@ -148,8 +148,8 @@ function ErrorSummary({ errors, submitAttempt }: ErrorSummaryProps) {
 - [Accessibility](<../HTML/Accessibility.md>)
 - [Semantics ARIA и accessible name](<./Semantics ARIA и accessible name.md>)
 - [Dialog dropdown и overlay accessibility](<./Dialog dropdown и overlay accessibility.md>)
-- [Portal](<../../Конспект для подготовки/React/Portal.md>)
-- [Radix UI](<../../Конспект для подготовки/React/Radix UI.md>)
+- [Portal](<../React/Portal.md>)
+- [Radix UI](<../React/Radix UI.md>)
 
 ## Источники
 

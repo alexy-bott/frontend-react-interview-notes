@@ -68,7 +68,7 @@ Stacking context создаётся разными свойствами: positio
 ## Связанные темы
 
 - [Позиционирование](<./Позиционирование.md>)
-- [Portal](<../../Конспект для подготовки/React/Portal.md>)
+- [Portal](<../React/Portal.md>)
 - [Анимации transform vs position](<./Анимации transform vs position.md>)
 - [Box Model](<./Box Model.md>)
 

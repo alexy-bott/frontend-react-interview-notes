@@ -138,7 +138,7 @@ Production-сбор данных добавляет sampling, app version, route
 5. Исправить одно измеренное узкое место.
 6. Проверить lab trace и дождаться подтверждения field distribution.
 
-Подробная диагностика каждой метрики находится в [Core Web Vitals LCP INP CLS](<../../Конспект для подготовки/Performance/Core Web Vitals LCP INP CLS.md>), а работа основного потока — в [Main thread long tasks и responsiveness](<../Browser Internals/Main thread long tasks и responsiveness.md>).
+Подробная диагностика каждой метрики находится в [Core Web Vitals LCP INP CLS](<../Performance/Core Web Vitals LCP INP CLS.md>), а работа основного потока — в [Main thread long tasks и responsiveness](<../Browser Internals/Main thread long tasks и responsiveness.md>).
 
 ## Границы метрик
 
@@ -156,8 +156,8 @@ Core Web Vitals не измеряют всё качество приложени
 
 ## Связанные темы
 
-- [Core Web Vitals LCP INP CLS](<../../Конспект для подготовки/Performance/Core Web Vitals LCP INP CLS.md>)
-- [Performance диагностика и профилирование](<../../Конспект для подготовки/Performance/Performance диагностика и профилирование.md>)
+- [Core Web Vitals LCP INP CLS](<../Performance/Core Web Vitals LCP INP CLS.md>)
+- [Performance диагностика и профилирование](<../Performance/Performance диагностика и профилирование.md>)
 - [Critical Render Path](<./Critical Render Path.md>)
 - [Main thread long tasks и responsiveness](<../Browser Internals/Main thread long tasks и responsiveness.md>)
 - [Rendering pipeline reflow repaint composite](<../Browser Internals/Rendering pipeline reflow repaint composite.md>)
