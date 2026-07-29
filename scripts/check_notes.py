@@ -77,7 +77,7 @@ def main() -> int:
             errors.append(f"{relative}: unresolved Obsidian wikilink")
         if re.search(r"^>\s*\[!", visible, flags=re.MULTILINE):
             errors.append(f"{relative}: unresolved Obsidian callout")
-        if text.count("<details>") != text.count("</details>"):
+        if visible.count("<details>") != visible.count("</details>"):
             errors.append(f"{relative}: unbalanced details block")
 
         details_blocks = DETAILS_RE.findall(visible)

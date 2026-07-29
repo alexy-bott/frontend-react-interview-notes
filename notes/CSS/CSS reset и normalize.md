@@ -83,7 +83,7 @@ select {
 
 - [Box Model](<./Box Model.md>)
 - [Специфичность селекторов](<./Специфичность селекторов.md>)
-- [Accessibility](<../../Конспект для подготовки/HTML/Accessibility.md>)
+- [Accessibility](<../HTML/Accessibility.md>)
 - [Responsive design и media queries](<./Responsive design и media queries.md>)
 
 ## Источники
