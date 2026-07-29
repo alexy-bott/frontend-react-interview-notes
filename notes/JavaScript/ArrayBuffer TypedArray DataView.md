@@ -199,8 +199,8 @@ const header = new DataView(buffer, 0, 16);
 - [Строки Unicode и кодировки](<./Строки Unicode и кодировки.md>)
 - [Копирование объектов](<./Копирование объектов.md>)
 - [Fetch и работа с API](<./Fetch и работа с API.md>)
-- [Web Workers](<../../Конспект для подготовки/Web Basics/Web Workers.md>)
-- [WebSocket](<../../Конспект для подготовки/Web Basics/WebSocket.md>)
+- [Web Workers](<../Web Basics/Web Workers.md>)
+- [WebSocket](<../Web Basics/WebSocket.md>)
 
 ## Источники
 

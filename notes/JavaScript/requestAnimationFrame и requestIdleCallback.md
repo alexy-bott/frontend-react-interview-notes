@@ -219,8 +219,8 @@ if (globalThis.scheduler?.postTask) {
 - [Event Loop](<./Event Loop.md>)
 - [Debounce и throttle](<./Debounce и throttle.md>)
 - [Оптимизация фронтенда](<./Оптимизация фронтенда.md>)
-- [Critical Render Path](<../../Конспект для подготовки/Web Basics/Critical Render Path.md>)
-- [Web Workers](<../../Конспект для подготовки/Web Basics/Web Workers.md>)
+- [Critical Render Path](<../Web Basics/Critical Render Path.md>)
+- [Web Workers](<../Web Basics/Web Workers.md>)
 
 ## Источники
 

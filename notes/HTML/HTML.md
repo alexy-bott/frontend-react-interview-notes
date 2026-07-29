@@ -73,7 +73,7 @@ HTML parser одновременно преобразует входной по�
 
 - [Семантическая верстка](<./Семантическая верстка.md>)
 - [Accessibility](<./Accessibility.md>)
-- [Critical Render Path](<../../Конспект для подготовки/Web Basics/Critical Render Path.md>)
+- [Critical Render Path](<../Web Basics/Critical Render Path.md>)
 - [CSS reset и normalize](<../CSS/CSS reset и normalize.md>)
 
 ## Источники

@@ -13,7 +13,14 @@ NOTES_ROOT = ROOT / "notes"
 ROOT_MAP = SOURCE_ROOT / "00 Карта подготовки.md"
 
 # Разделы добавляются сюда после проверки очередного тематического пакета.
-MIGRATED_SECTIONS = ("HTML", "Accessibility", "CSS", "JavaScript")
+MIGRATED_SECTIONS = (
+    "HTML",
+    "Accessibility",
+    "CSS",
+    "JavaScript",
+    "Browser Internals",
+    "Web Basics",
+)
 
 SECTION_GROUPS = (
     (

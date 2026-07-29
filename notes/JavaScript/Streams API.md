@@ -223,7 +223,7 @@ controller.abort("screen closed");
 - [AbortController](<./AbortController.md>)
 - [Итераторы и генераторы](<./Итераторы и генераторы.md>)
 - [ArrayBuffer TypedArray DataView](<./ArrayBuffer TypedArray DataView.md>)
-- [Web Workers](<../../Конспект для подготовки/Web Basics/Web Workers.md>)
+- [Web Workers](<../Web Basics/Web Workers.md>)
 
 ## Источники
 

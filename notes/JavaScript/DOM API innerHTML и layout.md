@@ -248,9 +248,9 @@ DOM API используют через предусмотренные точк�
 - [DOM events](<./DOM events.md>)
 - [Observer APIs](<./Observer APIs.md>)
 - [requestAnimationFrame и requestIdleCallback](<./requestAnimationFrame и requestIdleCallback.md>)
-- [Rendering pipeline reflow repaint composite](<../../Конспект для подготовки/Browser Internals/Rendering pipeline reflow repaint composite.md>)
-- [XSS](<../../Конспект для подготовки/Web Basics/XSS.md>)
-- [CSP и security headers](<../../Конспект для подготовки/Web Basics/CSP и security headers.md>)
+- [Rendering pipeline reflow repaint composite](<../Browser Internals/Rendering pipeline reflow repaint composite.md>)
+- [XSS](<../Web Basics/XSS.md>)
+- [CSP и security headers](<../Web Basics/CSP и security headers.md>)
 
 ## Источники
 

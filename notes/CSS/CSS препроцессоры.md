@@ -84,7 +84,7 @@ Mixin уменьшает повторение исходника, но кажд�
 - [SCSS архитектура и вложенность](<./SCSS архитектура и вложенность.md>)
 - [CSS reset и normalize](<./CSS reset и normalize.md>)
 - [Responsive design и media queries](<./Responsive design и media queries.md>)
-- [Bundlers и code splitting](<../../Конспект для подготовки/Web Basics/Bundlers и code splitting.md>)
+- [Bundlers и code splitting](<../Web Basics/Bundlers и code splitting.md>)
 
 ## Источники
 

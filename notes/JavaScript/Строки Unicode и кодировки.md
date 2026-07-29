@@ -191,7 +191,7 @@ Tagged template получает исходные и обработанные с
 - [Типы данных](<./Типы данных.md>)
 - [RegExp](<./RegExp.md>)
 - [ArrayBuffer TypedArray DataView](<./ArrayBuffer TypedArray DataView.md>)
-- [XSS](<../../Конспект для подготовки/Web Basics/XSS.md>)
+- [XSS](<../Web Basics/XSS.md>)
 
 ## Источники
 

@@ -64,7 +64,7 @@
 
 - [ES modules](<./ES modules.md>)
 - [async и defer](<./async и defer.md>)
-- [Bundlers и code splitting](<../../Конспект для подготовки/Web Basics/Bundlers и code splitting.md>)
+- [Bundlers и code splitting](<../Web Basics/Bundlers и code splitting.md>)
 
 ## Асинхронность
 
@@ -92,15 +92,15 @@
 
 ## Связанные браузерные API
 
-- [URL в адресной строке](<../../Конспект для подготовки/Web Basics/URL в адресной строке.md>)
-- [Хранение данных в браузере](<../../Конспект для подготовки/Web Basics/Хранение данных в браузере.md>)
-- [Cookies и авторизация](<../../Конспект для подготовки/Web Basics/Cookies и авторизация.md>)
+- [URL в адресной строке](<../Web Basics/URL в адресной строке.md>)
+- [Хранение данных в браузере](<../Web Basics/Хранение данных в браузере.md>)
+- [Cookies и авторизация](<../Web Basics/Cookies и авторизация.md>)
 - [Controlled uncontrolled и FormData](<../../Конспект для подготовки/Forms/Controlled uncontrolled и FormData.md>)
-- [Web Workers](<../../Конспект для подготовки/Web Basics/Web Workers.md>)
-- [Service Workers и PWA](<../../Конспект для подготовки/Web Basics/Service Workers и PWA.md>)
-- [Realtime transports](<../../Конспект для подготовки/Web Basics/Realtime transports.md>)
-- [WebSocket](<../../Конспект для подготовки/Web Basics/WebSocket.md>)
-- [SSE](<../../Конспект для подготовки/Web Basics/SSE.md>)
+- [Web Workers](<../Web Basics/Web Workers.md>)
+- [Service Workers и PWA](<../Web Basics/Service Workers и PWA.md>)
+- [Realtime transports](<../Web Basics/Realtime transports.md>)
+- [WebSocket](<../Web Basics/WebSocket.md>)
+- [SSE](<../Web Basics/SSE.md>)
 
 ## Алгоритмы и производительность
 
@@ -108,10 +108,10 @@
 - [Сложность Array методов](<../../Конспект для подготовки/Algorithms/Сложность Array методов.md>)
 - [Map Set Object и выбор структуры данных](<../../Конспект для подготовки/Algorithms/Map Set Object и выбор структуры данных.md>)
 - [Типовые frontend задачи](<../../Конспект для подготовки/Algorithms/Типовые frontend задачи.md>)
-- [Main thread long tasks и responsiveness](<../../Конспект для подготовки/Browser Internals/Main thread long tasks и responsiveness.md>)
-- [Memory leaks и profiling](<../../Конспект для подготовки/Browser Internals/Memory leaks и profiling.md>)
-- [Rendering pipeline reflow repaint composite](<../../Конспект для подготовки/Browser Internals/Rendering pipeline reflow repaint composite.md>)
-- [Page lifecycle visibility и background tabs](<../../Конспект для подготовки/Browser Internals/Page lifecycle visibility и background tabs.md>)
+- [Main thread long tasks и responsiveness](<../Browser Internals/Main thread long tasks и responsiveness.md>)
+- [Memory leaks и profiling](<../Browser Internals/Memory leaks и profiling.md>)
+- [Rendering pipeline reflow repaint composite](<../Browser Internals/Rendering pipeline reflow repaint composite.md>)
+- [Page lifecycle visibility и background tabs](<../Browser Internals/Page lifecycle visibility и background tabs.md>)
 - [Performance диагностика и профилирование](<../../Конспект для подготовки/Performance/Performance диагностика и профилирование.md>)
 - [Core Web Vitals LCP INP CLS](<../../Конспект для подготовки/Performance/Core Web Vitals LCP INP CLS.md>)
 - [Bundle size и loading strategy](<../../Конспект для подготовки/Performance/Bundle size и loading strategy.md>)

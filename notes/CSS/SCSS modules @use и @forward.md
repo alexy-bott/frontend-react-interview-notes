@@ -97,7 +97,7 @@ $radius-md: 8px;
 - [SCSS переменные mixins functions](<./SCSS переменные mixins functions.md>)
 - [SCSS архитектура и вложенность](<./SCSS архитектура и вложенность.md>)
 - [CSS препроцессоры](<./CSS препроцессоры.md>)
-- [Bundlers и code splitting](<../../Конспект для подготовки/Web Basics/Bundlers и code splitting.md>)
+- [Bundlers и code splitting](<../Web Basics/Bundlers и code splitting.md>)
 
 ## Источники
 

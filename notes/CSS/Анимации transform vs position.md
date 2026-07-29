@@ -79,8 +79,8 @@ Layout рассчитывает геометрию box. Paint записывае
 
 ## Связанные темы
 
-- [Critical Render Path](<../../Конспект для подготовки/Web Basics/Critical Render Path.md>)
-- [Core Web Vitals](<../../Конспект для подготовки/Web Basics/Core Web Vitals.md>)
+- [Critical Render Path](<../Web Basics/Critical Render Path.md>)
+- [Core Web Vitals](<../Web Basics/Core Web Vitals.md>)
 - [requestAnimationFrame и requestIdleCallback](<../JavaScript/requestAnimationFrame и requestIdleCallback.md>)
 - [Stacking context и z-index](<./Stacking context и z-index.md>)
 

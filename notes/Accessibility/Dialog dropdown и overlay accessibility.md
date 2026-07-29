@@ -129,7 +129,7 @@ Radix управляет большей частью ролей, клавиш и
 - [Portal](<../../Конспект для подготовки/React/Portal.md>)
 - [Compound Components и Headless UI](<../../Конспект для подготовки/Patterns/Compound Components и Headless UI.md>)
 - [Keyboard navigation и focus management](<./Keyboard navigation и focus management.md>)
-- [Event delegation capture bubble](<../../Конспект для подготовки/Browser Internals/Event delegation capture bubble.md>)
+- [Event delegation capture bubble](<../Browser Internals/Event delegation capture bubble.md>)
 
 ## Источники
 

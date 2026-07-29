@@ -79,7 +79,7 @@ Breakpoint означает не «планшет», а ширину, начин
 - [Flexbox](<./Flexbox.md>)
 - [Grid](<./Grid.md>)
 - [Box Model](<./Box Model.md>)
-- [Core Web Vitals](<../../Конспект для подготовки/Web Basics/Core Web Vitals.md>)
+- [Core Web Vitals](<../Web Basics/Core Web Vitals.md>)
 
 ## Источники
 

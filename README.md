@@ -10,3 +10,5 @@
 - [Accessibility](<./notes/Accessibility/README.md>) — 4 заметки.
 - [CSS](<./notes/CSS/README.md>) — 20 заметок.
 - [JavaScript](<./notes/JavaScript/README.md>) — 51 заметка.
+- [Browser Internals](<./notes/Browser Internals/README.md>) — 7 заметок.
+- [Web Basics](<./notes/Web Basics/README.md>) — 26 заметок.

@@ -221,7 +221,7 @@ type Message =
 
 ## Связанные темы
 
-- [Web Workers](<../../Конспект для подготовки/Web Basics/Web Workers.md>)
+- [Web Workers](<../Web Basics/Web Workers.md>)
 - [ArrayBuffer TypedArray DataView](<./ArrayBuffer TypedArray DataView.md>)
 - [Копирование объектов](<./Копирование объектов.md>)
 - [CORS CSP и browser security boundaries](<../../Конспект для подготовки/Security/CORS CSP и browser security boundaries.md>)

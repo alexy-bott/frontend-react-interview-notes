@@ -146,8 +146,8 @@ document.head.append(script);
 
 - [ES modules](<./ES modules.md>)
 - [Event Loop](<./Event Loop.md>)
-- [Critical Render Path](<../../Конспект для подготовки/Web Basics/Critical Render Path.md>)
-- [Bundlers и code splitting](<../../Конспект для подготовки/Web Basics/Bundlers и code splitting.md>)
+- [Critical Render Path](<../Web Basics/Critical Render Path.md>)
+- [Bundlers и code splitting](<../Web Basics/Bundlers и code splitting.md>)
 
 ## Источники
 

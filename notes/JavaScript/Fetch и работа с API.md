@@ -206,11 +206,11 @@ async function fetchJson<T>(
 - [Promise combinators](<./Promise combinators.md>)
 - [Streams API](<./Streams API.md>)
 - [JSON serialization](<./JSON serialization.md>)
-- [HTTP запрос](<../../Конспект для подготовки/Web Basics/HTTP запрос.md>)
-- [HTTP методы](<../../Конспект для подготовки/Web Basics/HTTP методы.md>)
-- [HTTP status codes и ошибки API](<../../Конспект для подготовки/Web Basics/HTTP status codes и ошибки API.md>)
-- [CORS](<../../Конспект для подготовки/Web Basics/CORS.md>)
-- [Cookies и авторизация](<../../Конспект для подготовки/Web Basics/Cookies и авторизация.md>)
+- [HTTP запрос](<../Web Basics/HTTP запрос.md>)
+- [HTTP методы](<../Web Basics/HTTP методы.md>)
+- [HTTP status codes и ошибки API](<../Web Basics/HTTP status codes и ошибки API.md>)
+- [CORS](<../Web Basics/CORS.md>)
+- [Cookies и авторизация](<../Web Basics/Cookies и авторизация.md>)
 - [Проверка данных с backend](<../../Конспект для подготовки/TypeScript/Проверка данных с backend.md>)
 
 ## Источники

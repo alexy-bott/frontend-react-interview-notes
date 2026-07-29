@@ -29,4 +29,4 @@
 - [Semantics ARIA и accessible name](<../Accessibility/Semantics ARIA и accessible name.md>)
 - [Keyboard navigation и focus management](<../Accessibility/Keyboard navigation и focus management.md>)
 
-HTML parser, stylesheets, scripts и media также связаны с [Critical Render Path](<../../Конспект для подготовки/Web Basics/Critical Render Path.md>).
+HTML parser, stylesheets, scripts и media также связаны с [Critical Render Path](<../Web Basics/Critical Render Path.md>).

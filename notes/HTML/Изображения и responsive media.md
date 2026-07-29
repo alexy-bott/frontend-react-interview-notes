@@ -81,8 +81,8 @@ Mobile files должны иметь соотношение сторон, сов
 - [Accessibility](<./Accessibility.md>)
 - [Images fonts и resource priority](<../../Конспект для подготовки/Performance/Images fonts и resource priority.md>)
 - [Responsive design и media queries](<../CSS/Responsive design и media queries.md>)
-- [Core Web Vitals](<../../Конспект для подготовки/Web Basics/Core Web Vitals.md>)
-- [Critical Render Path](<../../Конспект для подготовки/Web Basics/Critical Render Path.md>)
+- [Core Web Vitals](<../Web Basics/Core Web Vitals.md>)
+- [Critical Render Path](<../Web Basics/Critical Render Path.md>)
 
 ## Источники
 

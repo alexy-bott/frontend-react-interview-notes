@@ -141,7 +141,7 @@ console.log("2");
 - [DOM events](<./DOM events.md>)
 - [async и defer](<./async и defer.md>)
 - [requestAnimationFrame и requestIdleCallback](<./requestAnimationFrame и requestIdleCallback.md>)
-- [Critical Render Path](<../../Конспект для подготовки/Web Basics/Critical Render Path.md>)
+- [Critical Render Path](<../Web Basics/Critical Render Path.md>)
 
 ## Источники
 

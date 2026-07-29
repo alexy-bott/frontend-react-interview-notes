@@ -211,7 +211,7 @@ function mountBanner() {
 - [Debounce и throttle](<./Debounce и throttle.md>)
 - [AbortController](<./AbortController.md>)
 - [requestAnimationFrame и requestIdleCallback](<./requestAnimationFrame и requestIdleCallback.md>)
-- [Page lifecycle visibility и background tabs](<../../Конспект для подготовки/Browser Internals/Page lifecycle visibility и background tabs.md>)
+- [Page lifecycle visibility и background tabs](<../Browser Internals/Page lifecycle visibility и background tabs.md>)
 
 ## Источники
 
