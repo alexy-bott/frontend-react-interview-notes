@@ -1,7 +1,7 @@
 # Promise
 
 <!-- NOTE-NAV-TOP:START -->
-[← Event Loop](<./Event Loop.md>) · [↑ JavaScript](<./README.md>) · [⌂ Все разделы](<../../README.md>)
+[← Timers setTimeout setInterval](<./Timers setTimeout setInterval.md>) · [↑ JavaScript](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Promise combinators →](<./Promise combinators.md>)
 <!-- NOTE-NAV-TOP:END -->
 
 ## Быстрый ответ
@@ -186,11 +186,11 @@ loadUser("42")
 ## Связанные темы
 
 - [Event Loop](<./Event Loop.md>)
-- [async await](<../../Конспект для подготовки/JavaScript/async await.md>)
-- [Обработка ошибок](<../../Конспект для подготовки/JavaScript/Обработка ошибок.md>)
-- [Promise combinators](<../../Конспект для подготовки/JavaScript/Promise combinators.md>)
-- [AbortController](<../../Конспект для подготовки/JavaScript/AbortController.md>)
-- [Fetch и работа с API](<../../Конспект для подготовки/JavaScript/Fetch и работа с API.md>)
+- [async await](<./async await.md>)
+- [Обработка ошибок](<./Обработка ошибок.md>)
+- [Promise combinators](<./Promise combinators.md>)
+- [AbortController](<./AbortController.md>)
+- [Fetch и работа с API](<./Fetch и работа с API.md>)
 
 ## Источники
 
@@ -202,5 +202,5 @@ loadUser("42")
 ---
 
 <!-- NOTE-NAV-BOTTOM:START -->
-[← Event Loop](<./Event Loop.md>) · [↑ JavaScript](<./README.md>) · [⌂ Все разделы](<../../README.md>)
+[← Timers setTimeout setInterval](<./Timers setTimeout setInterval.md>) · [↑ JavaScript](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Promise combinators →](<./Promise combinators.md>)
 <!-- NOTE-NAV-BOTTOM:END -->

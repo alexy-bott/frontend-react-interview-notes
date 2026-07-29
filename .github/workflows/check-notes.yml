@@ -16,4 +16,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: python scripts/audit_source.py
+      - run: python scripts/build_notes.py --check
       - run: python scripts/check_notes.py

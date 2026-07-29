@@ -1,0 +1,100 @@
+# CSS reset и normalize
+
+<!-- NOTE-NAV-TOP:START -->
+[← Container queries](<./Container queries.md>) · [↑ CSS](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [CSS препроцессоры →](<./CSS препроцессоры.md>)
+<!-- NOTE-NAV-TOP:END -->
+
+## Быстрый ответ
+
+CSS reset и normalize управляют user-agent styles - встроенными стилями браузера. Reset намеренно убирает многие исходные визуальные решения, а normalize сохраняет полезные defaults и исправляет выбранные межбраузерные различия. Проектный base layer обычно задаёт только необходимые общие правила.
+
+Выбор зависит от ответственности проекта. Дизайн-система может позволить строгий reset, если затем полностью восстанавливает типографику, focus states, списки и form controls. Для прикладного интерфейса часто достаточно небольшого base layer: единый Box Model, margin страницы, наследование шрифта контролами и безопасное поведение media.
+
+## Ключевая схема
+
+| Подход | Что делает | Когда выбирать |
+| --- | --- | --- |
+| Reset | агрессивно сбрасывает стили | дизайн-система, полный контроль |
+| Normalize | выравнивает различия браузеров | сохранить полезные дефолты |
+| Base styles | точечно задает основу проекта | современный прикладной UI |
+
+## Базовая модель
+
+До авторского CSS браузер уже применяет user-agent stylesheet, например margins у заголовков и оформление form controls. Reset или normalize добавляется в author origin и участвует в обычном каскаде. Он не меняет HTML-семантику, но может убрать визуальные признаки этой семантики и доступные состояния.
+
+Поэтому цель не «обнулить браузер», а получить предсказуемую исходную точку с явно восстановленным поведением нужных элементов.
+
+## Развернутый ответ
+
+Без reset/base styles часть поведения зависит от user agent stylesheet браузера. Это заметно на headings, lists, buttons, inputs, margins, line-height и form controls. Разные браузеры могут иметь близкие, но не полностью одинаковые дефолты.
+
+Reset агрессивно убирает дефолтные стили, чтобы проект контролировал внешний вид сам. Normalize мягче: сохраняет полезные browser defaults и выравнивает различия. В приложениях с дизайн-системой часто используют не полный reset, а небольшой base layer.
+
+Типичный base layer задаёт `box-sizing: border-box`, убирает внешний margin страницы, делает replaced media адаптивными и передаёт form controls шрифтовые настройки. Конкретные правила должны соответствовать типу продукта: контентный сайт и плотная дизайн-система требуют разной исходной типографики.
+
+Особенно опасны глобальные `outline: none` и `all: unset`. Первое удаляет видимый focus indicator. Второе сбрасывает почти все свойства, включая наследуемые, и у form control убирает привычное оформление, не превращая его в другой семантический элемент. После reset нужно проверить headings, links, lists, buttons, inputs, disabled/error states и keyboard focus.
+
+## Пример
+
+```css
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+html {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+```
+
+Наследуемый вариант `box-sizing` позволяет отдельной области при необходимости сменить модель для всего поддерева. Остальные правила задают минимальные проектные решения, не снимая оформление focus и семантических элементов без замены.
+
+## Ключевые уточнения
+
+- Reset удаляет выбранные defaults, normalize сохраняет и согласует их, base layer фиксирует решения конкретного проекта.
+- CSS reset не удаляет семантику HTML, но способен скрыть её визуальные признаки.
+- Focus indicator нельзя убирать без видимой и контрастной замены.
+- Списки, headings и form controls сбрасывают только вместе с их полноценными проектными стилями.
+- Base layer лучше держать в низкоприоритетном cascade layer, чтобы компоненты переопределяли его без усиления селекторов.
+
+## Связанные темы
+
+- [Box Model](<./Box Model.md>)
+- [Специфичность селекторов](<./Специфичность селекторов.md>)
+- [Accessibility](<../../Конспект для подготовки/HTML/Accessibility.md>)
+- [Responsive design и media queries](<./Responsive design и media queries.md>)
+
+## Источники
+
+- [MDN: User-agent stylesheet](https://developer.mozilla.org/en-US/docs/Glossary/User_agent_stylesheet)
+- [MDN: box-sizing](https://developer.mozilla.org/en-US/docs/Web/CSS/box-sizing)
+- [MDN: :focus-visible](https://developer.mozilla.org/en-US/docs/Web/CSS/:focus-visible)
+- [Normalize.css](https://necolas.github.io/normalize.css/)
+
+---
+
+<!-- NOTE-NAV-BOTTOM:START -->
+[← Container queries](<./Container queries.md>) · [↑ CSS](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [CSS препроцессоры →](<./CSS препроцессоры.md>)
+<!-- NOTE-NAV-BOTTOM:END -->

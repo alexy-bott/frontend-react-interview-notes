@@ -4,5 +4,7 @@
 
 ## Разделы
 
-- [CSS](<./notes/CSS/README.md>) — раскладка и стили.
-- [JavaScript](<./notes/JavaScript/README.md>) — язык и браузерная модель выполнения.
+### 🌐 Основы веб-платформы
+
+- [CSS](<./notes/CSS/README.md>) — 20 заметок.
+- [JavaScript](<./notes/JavaScript/README.md>) — 51 заметка.

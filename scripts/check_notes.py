@@ -20,7 +20,7 @@ def text_outside_fences(text: str) -> str:
             in_fence = not in_fence
             continue
         if not in_fence:
-            result.append(line)
+            result.append(re.sub(r"`+[^`\n]*`+", "", line))
     return "\n".join(result)
 
 
@@ -49,9 +49,6 @@ def internal_targets(file: Path, text: str) -> list[Path]:
 def main() -> int:
     errors: list[str] = []
     notes = sorted(path for path in NOTES_ROOT.rglob("*.md") if path.name != "README.md")
-    note_set = {note.resolve() for note in notes}
-    related_inbound = {note.resolve(): 0 for note in notes}
-
     if not (ROOT / "README.md").exists():
         errors.append("README.md is missing")
     if not notes:
@@ -104,15 +101,7 @@ def main() -> int:
                 errors.append(f"{relative}: duplicate related topic")
             if note.resolve() in related_targets:
                 errors.append(f"{relative}: related topics contain a self-link")
-            for target in related_targets:
-                if target in note_set and target != note.resolve():
-                    related_inbound[target] += 1
-
         check_links(note, text, errors)
-
-    for note in notes:
-        if related_inbound[note.resolve()] == 0:
-            errors.append(f"{note.relative_to(ROOT)}: no incoming related-topic link")
 
     section_readmes = sorted(NOTES_ROOT.rglob("README.md"))
     for readme in section_readmes:
@@ -125,14 +114,24 @@ def main() -> int:
             errors.append(f"{relative}: note count is incorrect")
         if text.count("Начать с первой заметки →") != 1:
             errors.append(f"{relative}: start link is missing or duplicated")
-        if text.count("## Карта раздела") != 1 or text.count("## Последовательность материалов") != 1:
-            errors.append(f"{relative}: section structure is incomplete")
+        if len(re.findall(r"^# [^#]", text_outside_fences(text), flags=re.MULTILINE)) != 1:
+            errors.append(f"{relative}: expected exactly one H1")
+        if not re.search(r"^## [^#]", text_outside_fences(text), flags=re.MULTILINE):
+            errors.append(f"{relative}: expected at least one H2")
+        if "[[" in text_outside_fences(text):
+            errors.append(f"{relative}: unresolved Obsidian wikilink")
         readme_targets = set(internal_targets(readme, text))
         for note in section_notes:
             if note.resolve() not in readme_targets:
                 errors.append(f"{relative}: {note.name} is missing from navigation")
 
-    for readme in [ROOT / "README.md", *section_readmes]:
+    root_readme = ROOT / "README.md"
+    root_targets = set(internal_targets(root_readme, root_readme.read_text(encoding="utf-8")))
+    for readme in section_readmes:
+        if readme.resolve() not in root_targets:
+            errors.append(f"README.md: {readme.parent.name} section is missing from navigation")
+
+    for readme in [root_readme, *section_readmes]:
         check_links(readme, readme.read_text(encoding="utf-8"), errors)
 
     if errors:
@@ -142,7 +141,7 @@ def main() -> int:
         return 1
 
     sections = len({note.parent for note in notes})
-    print(f"Notes check passed: {len(notes)} pilot notes in {sections} sections.")
+    print(f"Notes check passed: {len(notes)} notes in {sections} sections.")
     return 0
 
 

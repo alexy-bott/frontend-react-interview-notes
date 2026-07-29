@@ -1,7 +1,7 @@
 # Event Loop
 
 <!-- NOTE-NAV-TOP:START -->
-[↑ JavaScript](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Promise →](<./Promise.md>)
+[← Обработка ошибок](<./Обработка ошибок.md>) · [↑ JavaScript](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Timers setTimeout setInterval →](<./Timers setTimeout setInterval.md>)
 <!-- NOTE-NAV-TOP:END -->
 
 ## Быстрый ответ
@@ -52,7 +52,7 @@ HTML Standard определяет циклы событий и нескольк
 
 `setTimeout(callback, 0)` устанавливает минимальную задержку, после которой задача таймера может стать готовой. Это не обещание немедленного выполнения: сначала должны завершиться текущая задача и все микрозадачи, а браузер также может выбрать другие готовые задачи.
 
-Обработчик DOM-события тоже не запускается посреди текущего JavaScript. Браузер создаёт событие и в отдельной задаче синхронно вызывает подходящие обработчики на этапах capture, target и bubble. Эти этапы объяснены в [DOM events](<../../Конспект для подготовки/JavaScript/DOM events.md>).
+Обработчик DOM-события тоже не запускается посреди текущего JavaScript. Браузер создаёт событие и в отдельной задаче синхронно вызывает подходящие обработчики на этапах capture, target и bubble. Эти этапы объяснены в [DOM events](<./DOM events.md>).
 
 ### Microtask checkpoint
 
@@ -135,12 +135,12 @@ console.log("2");
 ## Связанные темы
 
 - [Promise](<./Promise.md>)
-- [async await](<../../Конспект для подготовки/JavaScript/async await.md>)
-- [Timers setTimeout setInterval](<../../Конспект для подготовки/JavaScript/Timers setTimeout setInterval.md>)
-- [Promise combinators](<../../Конспект для подготовки/JavaScript/Promise combinators.md>)
-- [DOM events](<../../Конспект для подготовки/JavaScript/DOM events.md>)
-- [async и defer](<../../Конспект для подготовки/JavaScript/async и defer.md>)
-- [requestAnimationFrame и requestIdleCallback](<../../Конспект для подготовки/JavaScript/requestAnimationFrame и requestIdleCallback.md>)
+- [async await](<./async await.md>)
+- [Timers setTimeout setInterval](<./Timers setTimeout setInterval.md>)
+- [Promise combinators](<./Promise combinators.md>)
+- [DOM events](<./DOM events.md>)
+- [async и defer](<./async и defer.md>)
+- [requestAnimationFrame и requestIdleCallback](<./requestAnimationFrame и requestIdleCallback.md>)
 - [Critical Render Path](<../../Конспект для подготовки/Web Basics/Critical Render Path.md>)
 
 ## Источники
@@ -153,5 +153,5 @@ console.log("2");
 ---
 
 <!-- NOTE-NAV-BOTTOM:START -->
-[↑ JavaScript](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Promise →](<./Promise.md>)
+[← Обработка ошибок](<./Обработка ошибок.md>) · [↑ JavaScript](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Timers setTimeout setInterval →](<./Timers setTimeout setInterval.md>)
 <!-- NOTE-NAV-BOTTOM:END -->

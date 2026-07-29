@@ -1,7 +1,7 @@
 # Grid
 
 <!-- NOTE-NAV-TOP:START -->
-[← Flexbox](<./Flexbox.md>) · [↑ CSS](<./README.md>) · [⌂ Все разделы](<../../README.md>)
+[← Flexbox](<./Flexbox.md>) · [↑ CSS](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Responsive design и media queries →](<./Responsive design и media queries.md>)
 <!-- NOTE-NAV-TOP:END -->
 
 ## Быстрый ответ
@@ -70,9 +70,9 @@ Grid управляет строками и колонками одноврем�
 ## Связанные темы
 
 - [Flexbox](<./Flexbox.md>)
-- [Box Model](<../../Конспект для подготовки/CSS/Box Model.md>)
-- [Центрирование](<../../Конспект для подготовки/CSS/Центрирование.md>)
-- [Позиционирование](<../../Конспект для подготовки/CSS/Позиционирование.md>)
+- [Box Model](<./Box Model.md>)
+- [Центрирование](<./Центрирование.md>)
+- [Позиционирование](<./Позиционирование.md>)
 
 ## Источники
 
@@ -84,5 +84,5 @@ Grid управляет строками и колонками одноврем�
 ---
 
 <!-- NOTE-NAV-BOTTOM:START -->
-[← Flexbox](<./Flexbox.md>) · [↑ CSS](<./README.md>) · [⌂ Все разделы](<../../README.md>)
+[← Flexbox](<./Flexbox.md>) · [↑ CSS](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Responsive design и media queries →](<./Responsive design и media queries.md>)
 <!-- NOTE-NAV-BOTTOM:END -->
