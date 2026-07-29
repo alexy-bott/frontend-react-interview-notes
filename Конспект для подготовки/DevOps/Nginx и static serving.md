@@ -6,41 +6,48 @@ aliases:
   - nginx.conf frontend
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Nginx во frontend чаще всего используют как static server для собранной SPA: он отдаёт `index.html`, JS, CSS, изображения и другие assets. Для SPA важна настройка fallback: если пользователь открывает `/profile/settings`, такого файла на диске может не быть, поэтому Nginx должен вернуть `index.html`, а routing уже обработает React Router или другой client router.
+Nginx может отдавать собранную SPA как static files: `index.html`, hashed JS/CSS и media. Для client-side routing он сначала ищет реальный file, а для неизвестного route возвращает `index.html`; API и assets должны иметь отдельные locations, чтобы отсутствующий script или `/api` не маскировался HTML-ответом.
 
-Отдельно важно настроить кеширование. HTML обычно кешируют осторожно или с revalidation, потому что он указывает на актуальные версии assets. JS/CSS с content hash в имени можно кешировать долго через `immutable`. Это связывает Nginx-конфиг с frontend build-стратегией.
+HTML и versioned assets кешируют по-разному. `index.html` допускают хранить только с обязательной revalidation, потому что он ссылается на текущие chunks. Content-hashed assets кешируют надолго. Security headers и compression проверяют на фактических responses: Nginx `add_header` имеет особенности inheritance, из-за которых header верхнего уровня может исчезнуть при добавлении другого header внутри `location`.
 
 #### Ключевая схема
 
-| Задача | Nginx-настройка |
-| --- | --- |
-| Отдать статические файлы | `root`, `index` |
-| SPA fallback | `try_files $uri $uri/ /index.html` |
-| Долгий cache для hashed assets | `Cache-Control: public, max-age=31536000, immutable` |
-| Осторожный cache для HTML | `no-cache` или короткий TTL |
-| Сжатие | gzip/brotli на уровне сервера или precompressed assets |
-| Security headers | CSP, HSTS, nosniff, frame-ancestors |
+```text
+request
+-> API/proxy location? -> upstream
+-> real asset?         -> file + asset cache
+-> known SPA route?    -> index.html + revalidation
+-> client router       -> screen/not-found
+```
+
+| Задача | Механизм | Проверка |
+| --- | --- | --- |
+| Static files | `root`, `try_files` | status, MIME, body |
+| SPA fallback | `/index.html` | refresh nested route |
+| Asset cache | content hash + long `max-age` | повторный request/cache hit |
+| HTML freshness | `no-cache`/revalidation | после deploy виден новый manifest |
+| Compression | gzip/Brotli или precompressed files | `Content-Encoding`, `Vary` |
+| Security | headers по policy приложения | каждый response/location |
+
+#### Базовая модель
+
+URL `/settings/profile` не обязан существовать как file: после загрузки SPA его понимает client router. `try_files $uri $uri/ /index.html` возвращает shell, но catch-all нельзя ставить перед real assets/API. Иначе запрос отсутствующего `app.abc.js` получит status 200 и HTML, а browser покажет misleading MIME/syntax error.
+
+`Cache-Control: no-cache` не запрещает хранение: browser может сохранить response, но обязан revalidate перед повторным использованием. `no-store` запрещает хранение и часто избыточен для публичного `index.html`. Hashed asset не меняет content под тем же URL, поэтому `max-age=31536000, immutable` безопасен при сохранении старых files на время жизни открытых clients.
+
+Nginx выбирает наиболее подходящий `location`, и directives наследуются по собственным правилам. В частности, если текущий level содержит хотя бы один `add_header`, headers предыдущего level по обычной модели не наследуются. Поэтому security/cache headers удобно вынести в snippet и явно подключать там, где задаются location-level headers.
 
 #### Развернутый ответ
 
-SPA fallback нужен из-за client-side routing. URL `/profile/settings` может не соответствовать файлу на диске. `try_files` сначала ищет файл, затем директорию, а если ничего не нашёл - отдаёт `index.html`. После этого React Router или другой client router решает, какой экран показать.
+**Deploy.** Открытая вкладка со старым runtime может позже запросить старый lazy chunk. Atomic upload и retention прежних hashed assets предотвращают `ChunkLoadError`. Очистка CDN сразу после публикации нового HTML ломает long-lived sessions.
 
-HTML и hashed assets кешируют по-разному. `index.html` должен быстро обновляться после деплоя, потому что он ссылается на актуальные JS/CSS. Если HTML закеширован надолго, пользователь может получить старые ссылки на уже удалённые assets. JS/CSS с content hash можно кешировать долго: изменилось содержимое - изменилось имя файла.
+**SSR.** Nginx может завершать TLS, отдавать static assets и proxy-ровать остальные requests в Node process. `try_files ... /index.html` для SSR route неверен: HTML должен создать application server, а не статический shell.
 
-Security headers часто ставят на Nginx/CDN уровне: `Content-Security-Policy`, `Strict-Transport-Security`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`. Значения должны соответствовать реальному приложению, сторонним scripts, analytics, fonts и API, иначе headers могут сломать загрузку ресурсов.
+**Headers.** CSP строится по реальным script/style/connect sources и сначала проверяется в Report-Only mode. HSTS включают только на HTTPS origin с осознанным scope. `nosniff`, Referrer-Policy и Permissions-Policy также являются security contracts, а не набором строк для копирования.
 
-Для Next.js SSR Nginx часто выступает reverse proxy перед Node.js process, а не просто отдаёт `dist`. Он может завершать TLS, проксировать запросы, отдавать static assets, добавлять headers и управлять compression. Но сам SSR выполняет Node runtime.
-
-Compression можно включать на Nginx/CDN уровне или заранее генерировать `.gz`/`.br` при build. Нужно проверить `Content-Encoding`, `Vary: Accept-Encoding` и cache headers, чтобы сервер не отдавал неправильную версию ресурса.
-
-> [!faq]+ Уточнения
-> - `try_files $uri $uri/ /index.html` защищает SPA от 404 на refresh вложенного route.
-> - HTML кешируют осторожно, hashed assets - долго и immutable.
-> - Security headers должны учитывать реальные third-party scripts, fonts и API.
-> - Для SSR Nginx обычно reverse proxy, а Node process выполняет rendering.
-> - Compression требует корректных `Content-Encoding`, `Vary` и cache headers.
+**Compression.** Server выбирает representation по `Accept-Encoding` и отвечает соответствующим `Content-Encoding`; shared cache различает варианты через `Vary: Accept-Encoding`. Сжатие уже compressed images обычно не даёт пользы, а HTML/CSS/JS/JSON сжимаются хорошо.
 
 #### Пример
 
@@ -52,29 +59,34 @@ server {
   root /usr/share/nginx/html;
   index index.html;
 
+  location = /index.html {
+    add_header Cache-Control "no-cache" always;
+    include /etc/nginx/snippets/frontend-security.conf;
+  }
+
+  # Контракт Vite-подобной сборки: все files здесь content-hashed.
+  location /assets/ {
+    try_files $uri =404;
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+    include /etc/nginx/snippets/frontend-security.conf;
+  }
+
   location / {
     try_files $uri $uri/ /index.html;
-    add_header Cache-Control "no-cache";
+    include /etc/nginx/snippets/frontend-security.conf;
   }
-
-  location ~* \.(js|css|png|jpg|jpeg|gif|svg|webp|avif|woff2)$ {
-    try_files $uri =404;
-    add_header Cache-Control "public, max-age=31536000, immutable";
-  }
-
-  add_header X-Content-Type-Options "nosniff" always;
-  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 }
 ```
 
-#### Частые ошибки
+`frontend-security.conf` содержит согласованные headers и копируется в image рядом с server config. API location или reverse proxy добавляется до SPA catch-all. Конфиг проверяют `nginx -t` и HTTP-тестами для `/`, nested route, missing asset и cache headers.
 
-- Не настроить SPA fallback и получать 404 при refresh на nested route.
-- Кешировать `index.html` так же долго, как hashed assets.
-- Отдавать старые assets после deploy без стратегии invalidation.
-- Использовать Nginx-only container для приложения, которому нужен SSR runtime.
-- Ставить CSP без проверки analytics, fonts, API и third-party scripts.
-- Не проверять cache headers в DevTools Network.
+#### Ключевые уточнения
+
+- SPA fallback применяется routes, но отсутствующий asset/API должен сохранить корректный `404` или upstream response.
+- `no-cache` требует revalidation, а `no-store` запрещает хранение; это разные политики.
+- Immutable caching требует content hashes и retention старых chunks после deploy.
+- Location-level `add_header` способен отменить inheritance server-level headers, поэтому проверяют каждый тип response.
+- Nginx static serving не выполняет SSR; в server-rendered приложении он обычно proxy перед runtime.
 
 #### Связанные темы
 
@@ -82,12 +94,12 @@ server {
 - [[Конспект для подготовки/DevOps/Env variables и секреты]]
 - [[Конспект для подготовки/Web Basics/HTTP caching]]
 - [[Конспект для подготовки/Web Basics/CSP и security headers]]
-- [[Конспект для подготовки/React/SSR и SSG]]
+- [[Конспект для подготовки/Performance/Bundle size и loading strategy]]
 - [[Конспект для подготовки/React/React Router]]
-- [[Конспект для подготовки/Tooling/Build config и production сборка]]
 
 #### Источники
 
-- [NGINX Docs: Serve Static Content](https://docs.nginx.com/nginx/admin-guide/web-server/serving-static-content/)
-- [NGINX Docs: ngx_http_core_module](https://nginx.org/en/docs/http/ngx_http_core_module.html)
+- [NGINX: Serving Static Content](https://docs.nginx.com/nginx/admin-guide/web-server/serving-static-content/)
+- [NGINX: Core module and try_files](https://nginx.org/en/docs/http/ngx_http_core_module.html#try_files)
+- [NGINX: Headers module](https://nginx.org/en/docs/http/ngx_http_headers_module.html)
 - [MDN: HTTP caching](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching)

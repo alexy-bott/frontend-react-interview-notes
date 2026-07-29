@@ -8,9 +8,10 @@
 
 #### Маршрут
 
-1. Начать со Strategy: разные алгоритмы поведения без большого `if`.
-2. Разобрать Adapter и Facade: как изолировать UI от внешних API, SDK и DTO.
-3. Повторить Observer/PubSub: события, подписки, store updates, WebSocket и cleanup.
-4. Понять Factory и Singleton через создание clients/services и lifecycle в SSR/tests.
-5. Закрепить React/Vue UI-паттерны: compound components, headless UI, slots, custom hooks.
-6. В каждом паттерне держать frontend-пример: форма, таблица, API-слой, модалка, realtime, design system.
+1. Начать со Strategy: отделить семейство взаимозаменяемых алгоритмов от обычного callback и простого условия.
+2. Сравнить Adapter и Facade: первый согласует два контракта, второй упрощает работу с подсистемой.
+3. Разобрать Observer и PubSub через участников, доставку события, lifecycle подписки и явность потока данных.
+4. Разделить Factory, scope экземпляра и lifecycle: особенно важно для SPA, SSR и изоляции тестов.
+5. Завершить UI-паттернами: Compound Components определяют форму API, а Headless UI отделяет поведение от оформления.
+
+Для каждого паттерна сначала определяется решаемая проблема и граница применения. Узнавание знакомой структуры кода без этой связи недостаточно: один и тот же callback, context или wrapper может выполнять другую роль.

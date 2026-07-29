@@ -6,7 +6,7 @@ aliases:
   - isSubmitting
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
 Form state описывает не только значения полей, но и состояние взаимодействия: какие поля изменились, какие были посещены, есть ли ошибки, идёт ли submit, был ли submit успешным. В React Hook Form это обычно видно через `formState`: `errors`, `isDirty`, `dirtyFields`, `touchedFields`, `isSubmitting`, `isSubmitted`, `isSubmitSuccessful`, `isValid`.
 
@@ -31,11 +31,15 @@ idle
 | `touchedFields` | поля, с которыми пользователь взаимодействовал |
 | `isSubmitting` | submit handler сейчас выполняется |
 | `isValid` | форма валидна по текущему режиму validation |
-| `isSubmitSuccessful` | последний submit завершился успешно |
+| `isSubmitSuccessful` | submit callback завершился без необработанной ошибки |
 
-#### Развернутый ответ
+#### Базовая модель
 
 Dirty и touched отвечают на разные вопросы. Dirty означает, что значение изменилось относительно `defaultValues`. Touched означает, что пользователь заходил в поле. Поле может быть touched, но не dirty, если пользователь сфокусировался и ушёл без изменения.
+
+`isValid`, `isSubmitting` и business result также отвечают на разные вопросы: корректны ли текущие values, выполняется ли callback и принял ли backend операцию. Ни один flag не заменяет остальные.
+
+#### Развернутый ответ
 
 `defaultValues` нужны для корректного dirty state и reset. Для create-form это пустые начальные значения. Для edit-form их заполняют данными с backend после загрузки, а после успешного сохранения reset-ят форму новыми server values, чтобы dirty state снова стал false.
 
@@ -47,13 +51,7 @@ Submit lifecycle должен учитывать pending и повторную �
 
 Server errors входят в submit lifecycle. `422` обычно возвращается в поля, `409/412` требует conflict-сценария, `500/503` обычно становится form-level error с retry. Это разные UX-сценарии, поэтому API-слой должен передать форме не просто `Error`, а понятный тип ошибки.
 
-> [!faq]+ Уточнения
-> - Dirty = значение отличается от default, touched = пользователь заходил в поле.
-> - `defaultValues` нужны для dirty state, reset и edit-form.
-> - `isSubmitting` защищает UX от двойного submit, backend всё равно должен быть устойчивым.
-> - Field errors связывают с полями, form-level errors показывают в summary.
-> - После успешного edit-submit reset делают server values, а не пустыми значениями.
-> - `422`, `409/412` и `500/503` дают разные сценарии UI.
+`isSubmitSuccessful` — технический flag RHF, а не подтверждение domain success. Если callback поймал API error, вызвал `setError` и завершился обычным `return`, отдельный application result всё ещё должен определить success/failure. Аналогично `setError` показывает manual/server error, но `isValid` вычисляется validation rules формы.
 
 #### Пример
 
@@ -92,14 +90,14 @@ return (
 );
 ```
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Отключать submit по `!isValid` в режиме, где validation ещё не запускалась.
-- Не задавать `defaultValues` и получать странный dirty state.
-- Сбрасывать форму пустыми значениями после редактирования вместо актуальных server values.
-- Показывать server error только toast-ом, не связывая его с полем.
-- Не блокировать или не учитывать повторный submit.
-- Считать `isDirty` признаком валидности формы.
+- Dirty сравнивает values с `defaultValues`, touched фиксирует interaction, valid отражает validation result.
+- `isSubmitSuccessful` не заменяет business result от API.
+- После успешного edit-submit `reset(serverValues)` делает сохранённый server state новым baseline.
+- Pending UI ограничивает повторное действие, а backend обеспечивает idempotency/conflict safety.
+- Field и form errors остаются видимыми до исправления/retry и доступны для focus/navigation.
+- Submit button policy учитывает validation mode: `!isValid` до первой проверки может блокировать сценарий без понятной причины.
 
 #### Связанные темы
 

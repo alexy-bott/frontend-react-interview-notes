@@ -7,7 +7,7 @@ aliases:
   - lint и format
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
 ESLint и Prettier решают разные задачи. ESLint анализирует код и ищет проблемы: потенциальные баги, неправильное использование React hooks, неиспользуемые переменные, нарушения командных правил. Prettier форматирует код: переносы, отступы, кавычки, trailing commas. Поэтому ESLint - про качество и правила, Prettier - про единый стиль форматирования.
 
@@ -25,10 +25,16 @@ ESLint и Prettier решают разные задачи. ESLint анализи
 | Husky/lint-staged | проверки перед commit | `lint-staged` |
 | CI | обязательные проверки MR | `lint`, `typecheck`, `test`, `build` |
 
+#### Базовая модель
+
+TypeScript, ESLint и Prettier анализируют разные contracts: типовую корректность, статические правила поведения/архитектуры и deterministic formatting. Один зелёный инструмент не доказывает результат остальных.
+
 #### Развернутый ответ
 
 **ESLint смотрит на смысл кода.**
 Он может подсветить неправильные зависимости в React hooks, неиспользуемый импорт, опасный `any`, запрещённый import path, нарушение FSD boundary или командного соглашения. ESLint можно расширять plugins: React, React Hooks, TypeScript ESLint, import rules, accessibility rules.
+
+Некоторые TypeScript ESLint rules используют type information и требуют parser project/service configuration. Они ловят больше semantic ошибок, но работают медленнее; быстрый local lint и полный type-aware CI lint можно разделить осознанно.
 
 **Prettier убирает споры о стиле.**
 Он не пытается понять архитектуру приложения. Его задача - стабильно отформатировать код так, чтобы команда не обсуждала отступы, кавычки и переносы в review. Prettier лучше запускать автоматически в editor/pre-commit и отдельно проверять в CI.
@@ -42,7 +48,7 @@ TypeScript проверяет типы, но не все правила каче
 **CI должен запускать проверки в том же виде, что команда локально.**
 Если локально разработчики форматируют Prettier, а CI проверяет другим config, будут ложные падения. Если aliases настроены в Vite/TS, ESLint тоже должен понимать module resolution, иначе он может ругаться на валидные imports.
 
-#### Где применяется во frontend
+#### Практическое применение
 
 | Ситуация | Что проверяет |
 | --- | --- |
@@ -52,13 +58,6 @@ TypeScript проверяет типы, но не все правила каче
 | TypeScript проект | `@typescript-eslint` правила поверх typecheck |
 | Code review | меньше споров о стиле, больше внимания к логике |
 | CI quality gate | MR не проходит без lint/format/typecheck |
-
-#### Если уточнили
-
-> - **Чем ESLint отличается от Prettier?** ESLint ищет проблемы и нарушения правил, Prettier форматирует код.
-> - **Можно ли использовать только Prettier?** Можно для форматирования, но он не заменяет правила качества и React/TypeScript checks.
-> - **Можно ли использовать только ESLint?** Можно, но форматирование через ESLint часто даёт больше конфликтов и хуже отделяет стиль от качества.
-> - **Почему lint проходит локально, но падает в CI?** Часто отличаются версии Node/package manager, lock-файл, config, working directory или glob patterns.
 
 #### Пример scripts
 
@@ -75,14 +74,15 @@ TypeScript проверяет типы, но не все правила каче
 
 Такой набор разделяет проверки: lint не отвечает за форматирование, Prettier не отвечает за типы, TypeScript не отвечает за командные lint-правила.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Считать ESLint и Prettier одним и тем же.
-- Дублировать форматирующие правила ESLint и Prettier.
-- Не запускать `format:check` в CI.
-- Настроить aliases в Vite/TS, но не настроить resolver для ESLint.
-- Отключать lint-правила глобально вместо точечного решения.
-- Заменять `typecheck` одним ESLint.
+- Prettier форматирует syntax tree, но не подтверждает correctness/accessibility/architecture.
+- ESLint rules имеют owner/rationale; global disable требует изменения policy, точечный disable — комментария причины.
+- Type-aware lint дополняет, но не заменяет `tsc --noEmit` и application tests.
+- Flat config, plugins и resolver должны соответствовать версии ESLint и module model проекта.
+- Pre-commit даёт быстрый feedback только по staged files; CI проверяет repository целиком в clean environment.
+- Aliases/import boundaries синхронизируют с actual TypeScript/bundler resolution, иначе lint создаёт false signals.
+- Auto-fix запускают на контролируемом diff: fixable rule способен изменить semantics.
 
 #### Связанные темы
 

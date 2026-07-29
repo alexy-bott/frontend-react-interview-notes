@@ -6,85 +6,92 @@ aliases:
   - Docker basics
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Docker нужен фронтенд-разработчику, чтобы приложение собиралось и запускалось одинаково в локальной среде, CI и production. Базовые сущности: image - шаблон с файловой системой и инструкциями запуска, container - запущенный экземпляр image, Dockerfile - рецепт сборки image, registry - хранилище images, layer - слой образа, который можно кешировать и переиспользовать.
+Docker упаковывает приложение и его runtime в image, из которого запускаются изолированные processes - containers. Dockerfile описывает сборку, registry хранит images, layers позволяют переиспользовать части сборки, а volumes и networks подключают внешние данные и другие services.
 
-Для frontend есть два типичных сценария. SPA собирается в статические файлы и обычно отдаётся Nginx, CDN или другим static server. SSR-приложение, например Next.js в server mode, требует runtime-процесса Node.js или платформы, которая умеет выполнять серверный код. Runtime зависит от типа приложения: frontend в Docker не всегда означает Nginx-only container.
+Для статической SPA Node.js обычно нужен только на build stage: результат `dist` отдаёт Nginx, CDN или static hosting. SSR-приложение выполняет server code на каждый request и требует Node.js либо другого поддерживаемого runtime. Docker делает среду воспроизводимее только при фиксированных dependencies, base images и одном проверенном artifact; сам контейнер не устраняет различия configuration.
 
 #### Ключевая схема
 
-| Понятие | Смысл |
-| --- | --- |
-| Image | неизменяемый шаблон приложения |
-| Container | запущенный image |
-| Dockerfile | инструкция сборки image |
-| Build context | файлы, которые отправляются Docker build |
-| Layer | кешируемый слой image |
-| Registry | место хранения images |
-| Volume | внешнее хранилище данных |
-| Network | связь контейнеров между собой |
+```text
+source + Dockerfile + build context
+-> docker build
+-> immutable image layers
+-> registry repository:tag / digest
+-> docker run
+-> container process + writable layer
+```
+
+| Сущность | Роль | Важная граница |
+| --- | --- | --- |
+| Image | шаблон filesystem/config | не является запущенным process |
+| Container | экземпляр image | его writable layer временный |
+| Tag | удобное изменяемое имя image | может указывать на другой digest |
+| Digest | content-addressed identity | точно определяет image content |
+| Build context | доступные build files | лишнее увеличивает transfer и риск утечки |
+| Volume | данные вне writable layer | lifecycle отделён от container |
+| Network | связь containers/services | published host port настраивается отдельно |
+
+#### Базовая модель
+
+Image состоит из read-only layers и metadata, включая default command. При запуске Docker создаёт container с отдельным writable layer и process namespace. Удаление container удаляет его локальные изменения, если данные не вынесены во volume или внешний service.
+
+Registry хранит image manifests/layers. Tag вроде `frontend:production` можно переназначить, поэтому для диагностики и rollback release связывают с immutable commit tag и digest. `latest` не означает «самая новая безопасная версия» и не является стратегией versioning.
+
+Build context отправляется builder до выполнения `COPY`. `.dockerignore` исключает `node_modules`, `.git`, build output, coverage и локальные env files. Исключение уменьшает контекст, но уже попавший в layer секрет нельзя надёжно «удалить» следующей инструкцией: предыдущий layer сохраняется.
 
 #### Развернутый ответ
 
-Image - это неизменяемый артефакт сборки: файловая система, metadata и команда запуска. Container появляется, когда image запускают. Из одного image можно поднять несколько containers с разными env, портами и настройками. Поэтому image должен быть воспроизводимым, а runtime-конфигурация - управляемой снаружи.
+**SPA.** Build stage устанавливает dependencies и создаёт hashed HTML/CSS/JS/assets. Runtime image содержит только эти files и static server. Альтернатива Docker - загрузка тех же immutable assets в object storage/CDN; container не обязателен для статического frontend.
 
-Для SPA типичный pipeline состоит из двух частей: Node image собирает `dist`/`build`, затем runtime image вроде `nginx:alpine` отдаёт готовые статические файлы. Production image содержит только runtime-файлы: HTML, JS, CSS, assets и Nginx config. Локальные `node_modules`, исходники, dev-зависимости и package manager cache туда не попадают.
+**SSR.** Runtime запускает server entry, читает server-only environment и обрабатывает requests. Nginx может завершать TLS и работать reverse proxy, но HTML rendering выполняет application runtime. Static export Next.js снова относится к SPA/static model.
 
-Для SSR/Next.js server mode нужен другой runtime. Если приложение рендерит HTML на запросе, контейнер должен запускать Node process или standalone server output, иметь server entrypoint и runtime env variables. Nginx в таком сценарии может быть reverse proxy перед Node.js, но не единственным runtime.
+**Configuration.** Один image можно запускать с разными runtime variables, если application действительно читает их во время runtime. Готовая SPA не начинает читать `docker run -e` автоматически: её JavaScript уже собран, поэтому нужен публичный config endpoint/file либо отдельный build.
 
-Build context - набор файлов, который Docker отправляет в сборку. `.dockerignore` защищает context от `node_modules`, `.git`, `dist`, coverage, локальных `.env` и мусорных артефактов. Это ускоряет build и снижает риск случайно положить чувствительные данные в image layers.
+**Ports.** `EXPOSE` документирует ожидаемый port image. Доступ с host создаётся параметром `-p host:container` или orchestration service. Container-to-container traffic использует network и service name, а не автоматически `localhost` host machine.
 
-После сборки image пушат в registry: GitLab Container Registry, Docker Hub, Harbor, AWS ECR или другой registry. Для deploy используют конкретный tag: commit SHA, release tag, semver. Один `latest` без версии мешает rollback и диагностике.
-
-> [!faq]+ Уточнения
-> - Image - артефакт, container - запущенный экземпляр image.
-> - SPA часто собирают в Node stage и отдают через Nginx/CDN/static server.
-> - Next.js SSR/server mode требует Node runtime или платформу с server execution.
-> - `.dockerignore` уменьшает build context и защищает от лишних файлов.
-> - Production image тегают commit SHA/release tag, а не только `latest`.
+**Supply chain.** Base image выбирают по поддерживаемой runtime-версии, регулярно обновляют и сканируют. Pin по digest усиливает воспроизводимость, но требует процесса обновления security fixes; floating tag обновляется незаметно. Команда выбирает policy и фиксирует обновления dependency bot/review.
 
 #### Пример
 
 ```bash
-docker build -t registry.example.com/app/frontend:abc123 .
-docker run --rm -p 8080:80 registry.example.com/app/frontend:abc123
-docker push registry.example.com/app/frontend:abc123
+docker build -t registry.example.com/frontend:abc123 .
+docker run --rm -p 8080:80 registry.example.com/frontend:abc123
+docker push registry.example.com/frontend:abc123
+docker image inspect registry.example.com/frontend:abc123 --format "{{.Id}}"
 ```
-
-Минимальная `.dockerignore`:
 
 ```dockerignore
 node_modules
 dist
-build
+coverage
 .git
 .env
 .env.*
-npm-debug.log
-coverage
+!.env.example
 ```
 
-#### Частые ошибки
+Commit tag связывает image с source revision. Для production deployment registry/orchestrator дополнительно фиксирует digest, полученный после push.
 
-- Путать image и container.
-- Копировать `node_modules` с локальной машины внутрь image.
-- Не использовать `.dockerignore`.
-- Думать, что SPA и SSR деплоятся одинаково.
-- Класть секреты в frontend image или `.env`, который попадает в build context.
-- Тегать production image только как `latest` без commit/release tag.
+#### Ключевые уточнения
+
+- Image описывает filesystem и запуск, container является process instance с отдельным временным writable layer.
+- Tag можно переназначить, digest неизменно идентифицирует content; release metadata хранит оба.
+- Docker обеспечивает одинаковый artifact, но runtime configuration и внешняя инфраструктура всё равно могут различаться.
+- Static SPA и SSR требуют разных runtime: Nginx не исполняет server rendering приложения.
+- Секрет исключают до попадания в build context/layer; удаление файла поздней инструкцией не очищает историю image.
 
 #### Связанные темы
 
 - [[Конспект для подготовки/DevOps/Dockerfile и multi-stage build]]
 - [[Конспект для подготовки/DevOps/Nginx и static serving]]
 - [[Конспект для подготовки/DevOps/Env variables и секреты]]
-- [[Конспект для подготовки/DevOps/GitLab CI CD]]
-- [[Конспект для подготовки/React/SSR и SSG]]
+- [[Конспект для подготовки/DevOps/Frontend pipeline]]
 - [[Конспект для подготовки/Next.js/Deployment env Docker]]
-- [[Конспект для подготовки/Web Basics/Bundlers и code splitting]]
 
 #### Источники
 
-- [Docker Docs: What is Docker?](https://docs.docker.com/get-started/docker-overview/)
-- [Docker Docs: Dockerfile reference](https://docs.docker.com/reference/dockerfile/)
+- [Docker: Docker overview](https://docs.docker.com/get-started/docker-overview/)
+- [Docker: Images](https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-an-image/)
+- [Docker: Build context](https://docs.docker.com/build/concepts/context/)

@@ -7,9 +7,9 @@ aliases:
   - контроль размера bundle
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-В bundle попадает не всё из `package.json`, а только то, до чего дошёл dependency graph от entrypoints: статические imports, CSS/assets imports, код зависимостей, который реально импортируется из runtime-кода, и chunks от dynamic import. `dependencies` или `devDependencies` сами по себе не решают, попадёт пакет в клиентский bundle или нет: решает импорт и настройка bundler.
+Build output определяется client dependency graph, а не разделом package manifest. Static imports формируют initial/shared chunks, dynamic import создаёт async split point, assets/CSS входят по правилам toolchain, а tree shaking может удалить statically unused exports. Package может находиться в `devDependencies` и всё равно попасть в browser, если client source его импортирует.
 
 Чтобы понять состав bundle, используют production build, bundle analyzer, sourcemap/visualizer, Webpack stats, Vite/Rollup output и browser Coverage. Важно смотреть не только общий размер, а initial JS, route chunks, vendor chunks, parse/execute cost и waterfall.
 
@@ -37,16 +37,22 @@ entrypoint
 | Как ограничить размер? | budgets в CI, Webpack performance, custom size check |
 | Как не сломать UX splitting-ом? | Network waterfall, preload/prefetch, Suspense fallback |
 
-#### Развернутый ответ
+#### Базовая модель
 
 **Bundle начинается с entrypoint.**
 Bundler берёт входные точки приложения и строит dependency graph. Если файл импортируется из entrypoint напрямую или через цепочку imports, он становится кандидатом на попадание в build output. Dynamic import обычно создаёт отдельный async chunk: код всё ещё входит в build output, но не загружается на первом экране.
+
+Размер имеет несколько измерений: raw output влияет на storage/cache, gzip/Brotli — на transfer, parse/compile/execute — на main thread и device CPU. Initial request graph и waterfall обычно важнее суммы всех lazy chunks, которые пользователь может никогда не загрузить.
+
+#### Развернутый ответ
 
 **`dependencies` и `devDependencies` не являются границей bundle.**
 Если runtime-код импортирует пакет, bundler может включить его в клиентский JS даже если пакет лежит в `devDependencies`. И наоборот: пакет из `dependencies` не попадёт в bundle, если он нигде не импортируется в клиентском графе. Разделы зависимостей важны для install/deploy semantics, но состав bundle определяется графом импортов.
 
 **Tree shaking удаляет неиспользуемый код не всегда.**
 Лучше всего он работает с ES modules, где bundler статически видит imports/exports. Ограничения: CommonJS, top-level side effects, неправильное поле `sideEffects`, namespace imports, barrel files, библиотеки с неочевидными runtime effects. Иногда точечный импорт или замена пакета дают больше, чем настройка bundler.
+
+`sideEffects: false` является обещанием package, а не дополнительной minification. Ошибочная metadata способна удалить CSS import, registration или polyfill. Analyzer показывает composition, но не доказывает, что удалённый/оставшийся code семантически корректен.
 
 **Analyzer нужен до оптимизации, а не после догадок.**
 Типичный порядок: собрать production build, открыть analyzer, найти самые дорогие chunks/modules, понять import chain, проверить Coverage/Network, затем решить: lazy load, заменить dependency, импортировать точечно, вынести в async chunk, настроить splitting или удалить лишний код.
@@ -57,7 +63,7 @@ Bundler берёт входные точки приложения и строи�
 **Budget не должен быть слепым числом.**
 Один общий лимит “bundle меньше 500 KB” часто бесполезен. Лучше разделять: initial route JS, async route chunks, vendor, CSS, images/fonts. Для UX важнее то, что нужно до первого экрана и первого взаимодействия.
 
-#### Где применяется во frontend
+#### Практическое применение
 
 | Ситуация | Что делать |
 | --- | --- |
@@ -69,14 +75,6 @@ Bundler берёт входные точки приложения и строи�
 | Route грузится медленно | проверить async chunks и waterfall |
 | CI должен ловить регрессии | добавить size budget check |
 | Нужно CDN external | осознанно настроить external и fallback/SRI, если уместно |
-
-#### Если уточнили
-
-> - **Как понять, почему библиотека попала в bundle?** Смотреть analyzer/stats и цепочку imports: какой файл впервые импортировал пакет.
-> - **Попадает ли `devDependency` в bundle?** Может попасть, если её импортирует клиентский runtime-код.
-> - **Code splitting уменьшает bundle?** Он не обязательно уменьшает общий build output, но уменьшает initial JS и переносит часть загрузки на момент, когда код реально нужен.
-> - **Что такое size budget?** Автоматическое ограничение размера assets/chunks, которое предупреждает или ломает CI при превышении лимита.
-> - **Почему gzip-size мало?** Gzip показывает сетевой размер, но JavaScript ещё нужно распарсить, скомпилировать и выполнить на main thread.
 
 #### Пример Webpack budget
 
@@ -94,37 +92,33 @@ module.exports = {
 
 Такой config не заменяет анализ производительности, но превращает сильный рост initial JS в заметный сигнал на build step.
 
-#### Пример Vite/Rollup splitting
+#### Пример split point
 
-```ts
-// vite.config.ts
-import { defineConfig } from "vite";
+```tsx
+import { lazy, Suspense } from "react";
 
-export default defineConfig({
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          charts: ["recharts"],
-        },
-      },
-    },
-  },
-});
+const AnalyticsChart = lazy(() => import("./AnalyticsChart"));
+
+export function AnalyticsSection() {
+  return (
+    <Suspense fallback={<ChartSkeleton />}>
+      <AnalyticsChart />
+    </Suspense>
+  );
+}
 ```
 
-Идея `manualChunks` - управлять разбиением, когда автоматический splitting даёт плохой результат. Настройку проверяют analyzer-ом и Network waterfall, потому что ручное дробление может как помочь, так и создать лишние запросы.
+Dynamic import создаёт стабильную version-independent boundary. Он уменьшит initial cost только если chart code не нужен до первого взаимодействия/экрана. Advanced manual chunk config зависит от Vite/Rolldown/Rollup/Webpack version и применяется после analyzer/waterfall, а не вместо application boundary.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Смотреть только размер `dist`, а не initial JS.
-- Думать, что `devDependencies` не могут попасть в bundle.
-- Добавлять heavy dependency без analyzer diff.
-- Настраивать splitting без проверки waterfall.
-- Надеяться на tree shaking для CommonJS/side-effect-heavy пакетов.
-- Считать gzip-size полной стоимостью JavaScript.
-- Не проверять bundle в CI.
-- Публиковать sourcemaps без политики доступа и потом путать их с runtime bundle.
+- Build output, initial transfer и executed JavaScript — разные metrics.
+- Dynamic import переносит cost, но не обязан уменьшать суммарный output; слишком поздний split создаёт interaction latency.
+- Analyzer отвечает «что/почему включено», browser Performance/Network — «когда загружено и сколько стоило выполнить».
+- Tree shaking зависит от static ESM graph и truthful side-effect metadata, а не только от named import syntax.
+- Size budget задают по route/entrypoint и compression mode, фиксируя measurement tool/version в CI.
+- Bundle diff оценивают вместе с cache churn: изменение shared vendor chunk может заставить users повторно скачать большой asset.
+- Source maps не являются runtime code, но могут раскрывать source и заметно увеличивать published artifacts.
 
 #### Связанные темы
 

@@ -5,11 +5,11 @@ aliases:
   - контекст наложения
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Stacking context - это локальный контекст наложения элементов по оси z. `z-index` работает не глобально по всей странице, а внутри своего stacking context. Поэтому элемент с огромным `z-index` может все равно оказаться под другим элементом, если его родитель находится в более низком контексте.
+Stacking context, или контекст наложения, - это локальная группа элементов, которая участвует в порядке отрисовки как единое целое. Значения `z-index` сравниваются внутри соответствующего контекста, поэтому потомок с `z-index: 9999` не может обойти соседний stacking context, если весь его родительский контекст расположен ниже.
 
-Stacking context создают не только `position` плюс `z-index`, но и `transform`, `opacity < 1`, `filter`, `isolation: isolate`, `position: fixed/sticky`, некоторые значения `contain` и другие свойства. Проблемы с overlay, dropdown и modal часто решаются не увеличением `z-index`, а анализом родительских контекстов.
+Stacking context создают не только positioned element с `z-index`, но и `fixed`/`sticky`, flex/grid item с `z-index`, `opacity < 1`, `transform`, `filter`, `isolation: isolate`, некоторые виды `contain` и другие свойства. Отдельно `overflow` может обрезать overlay, хотя сам по себе не обязан создавать stacking context.
 
 #### Ключевая схема
 
@@ -22,22 +22,21 @@ Stacking context создают не только `position` плюс `z-index`,
 | `isolation: isolate` | явная изоляция |
 | `position: fixed/sticky` | отдельные случаи |
 
+#### Базовая модель
+
+Сначала браузер определяет дерево stacking contexts. Затем содержимое каждого контекста рисуется в установленном порядке, после чего весь контекст рассматривается родителем как атомарный элемент. Число `z-index` ребёнка не сравнивается напрямую с числами в соседнем родительском контексте.
+
+Clipping - отдельная граница. Если предок обрезает содержимое через `overflow`, `clip-path` или `contain: paint`, увеличение `z-index` не позволяет нарисовать потомка за этой границей.
+
 #### Развернутый ответ
 
 `z-index` сравнивается внутри stacking context, а не по всей странице. Если родительский stacking context находится ниже соседнего контекста, дочерний элемент с `z-index: 9999` не сможет выйти поверх него одним увеличением числа.
 
 Stacking context создаётся разными свойствами: positioned element с `z-index` не `auto`, `opacity < 1`, `transform`, `filter`, `perspective`, `isolation: isolate`, `position: fixed/sticky`, некоторые значения `contain` и другие свойства. Поэтому проблема overlay часто находится не на самом overlay, а на его предках.
 
-`z-index` работает для positioned elements (`relative`, `absolute`, `fixed`, `sticky`) и flex/grid items в некоторых случаях. Если элемент находится в обычном потоке без нужного контекста, `z-index` может не дать ожидаемого эффекта.
+`z-index` применим к positioned elements, а также к flex и grid items без обязательного `position`. Он задаёт stack level элемента в текущем контексте и в некоторых случаях одновременно создаёт новый stacking context. Финальный paint order учитывает не только число, но и категории вроде отрицательного, `auto`/нулевого и положительного stack level.
 
-Для modal/dropdown проверяют родителей на `transform`, `opacity`, `overflow`, `position`, `z-index` и `contain`. В React overlays часто выносят через Portal ближе к `body`, чтобы не зависеть от локальных stacking/overflow ограничений.
-
-> [!faq]+ Уточнения
-> - `z-index` не глобален, он работает внутри stacking context.
-> - `transform` и `opacity < 1` могут создать новый stacking context.
-> - `overflow: hidden` может обрезать dropdown даже при большом `z-index`.
-> - Portal помогает вынести overlay из локальных ограничений.
-> - Stacking context отличается от block formatting context.
+Для modal и dropdown проверяют предков на `transform`, `opacity`, `overflow`, `position`, `z-index`, `contain` и `isolation`. React Portal может перенести DOM-узел ближе к `body` и вывести его из локального clipping/stacking context. Но Portal сам не гарантирует верхний слой: нативные `<dialog>` и Popover API могут помещать элементы в browser top layer, который расположен поверх обычных stacking contexts.
 
 #### Пример
 
@@ -54,13 +53,18 @@ Stacking context создаётся разными свойствами: positio
 
 Если `.page` создал stacking context, modal внутри него может проиграть элементу из другого контекста.
 
-#### Частые ошибки
+#### Диагностика
 
-- Увеличивать `z-index` бесконечно вместо анализа контекстов.
-- Не замечать, что `transform` на родителе создал новый stacking context.
-- Путать stacking context и block formatting context.
-- Забывать про `overflow: hidden`, который может обрезать dropdown.
-- Не использовать portal для overlays в React.
+В DevTools нужно подняться от проблемного элемента по DOM и найти ближайшие stacking contexts и clipping ancestors. Если элемент находится ниже, исправляют уровень нужного родительского контекста или переносят overlay в подходящий контейнер. Если он обрезан, проверяют `overflow`, `clip-path`, `contain: paint` и геометрию; увеличение `z-index` эту проблему не решит.
+
+#### Ключевые уточнения
+
+- Stacking context атомарен относительно родителя; `z-index` потомка не становится глобальным.
+- `overflow` и stacking context - разные механизмы: первый может обрезать, второй определяет paint order.
+- `transform` и `opacity < 1` способны создать неожиданный локальный контекст.
+- Portal меняет место DOM-узла, но не отменяет stacking contexts вокруг нового контейнера.
+- Browser top layer находится над обычными stacking contexts и используется, например, открытым modal `<dialog>`.
+- Block formatting context управляет layout, а stacking context - порядком отрисовки.
 
 #### Связанные темы
 
@@ -74,3 +78,4 @@ Stacking context создаётся разными свойствами: positio
 - [MDN: Stacking context](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_positioned_layout/Stacking_context)
 - [MDN: z-index](https://developer.mozilla.org/en-US/docs/Web/CSS/z-index)
 - [MDN: transform](https://developer.mozilla.org/en-US/docs/Web/CSS/transform)
+- [MDN: Top layer](https://developer.mozilla.org/en-US/docs/Glossary/Top_layer)

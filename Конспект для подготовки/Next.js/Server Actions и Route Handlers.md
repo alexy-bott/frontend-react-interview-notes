@@ -6,11 +6,11 @@ aliases:
   - route.ts
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Server Actions и Route Handlers решают разные задачи. Server Action - server function для мутаций, которую можно вызвать из формы или Client Component; она помечается `"use server"`, выполняется на сервере, может валидировать данные, проверять права, писать в базу, делать `revalidatePath`/`revalidateTag`, `redirect`, работать с cookies. В Next.js 14 Server Actions стали стабильной фичей.
+Server Action — server function, интегрированная с React/Next.js mutation flow. Её можно передать в `<form action>` или вызвать из Client Component; framework создаёт network request, выполняет function на server и возвращает обновлённый UI/result. Route Handler — явный HTTP endpoint в `app/**/route.ts` на Web `Request`/`Response` API.
 
-Route Handler - HTTP endpoint в `app/**/route.ts`, построенный на Web `Request`/`Response`. Его используют для webhooks, public API, downloads, custom headers, CORS, proxy/BFF, health checks и интеграций, которым нужен настоящий HTTP interface. Если задача - mutation из UI формы, часто подходит Server Action. Если нужен endpoint для внешнего клиента или precise HTTP semantics, подходит Route Handler.
+Server Action подходит для мутации, принадлежащей Next.js UI: form submit, validation, authorization, запись и revalidation. Route Handler выбирают, когда нужен самостоятельный HTTP contract: webhook, public API, download/stream, CORS, health check или endpoint для другого клиента. Оба являются server entry points и должны проверять authentication, authorization и runtime input.
 
 #### Ключевая схема
 
@@ -21,23 +21,27 @@ Route Handler - HTTP endpoint в `app/**/route.ts`, построенный на 
 | Public REST endpoint | нет | да |
 | Mutation + revalidate | да | да |
 | Cookies/redirect | да | да |
-| CORS/custom HTTP methods | ограниченно | да |
+| CORS/status/HTTP methods | не основной interface | да |
 | File download/stream | нет | да |
 | Вызов из Server Component | через action/form | прямой server code обычно проще |
 
-#### Развернутый ответ
+#### Базовая модель
 
 Server Actions уменьшают расстояние между UI и server mutation. Вместо отдельного API route можно описать server function, передать её в `<form action={...}>` или вызвать из client logic. Action получает `FormData` или serializable аргументы, выполняется на сервере и возвращает serializable результат. Это удобно для CRUD-форм, настроек профиля, лайков, корзины, CMS-actions.
 
-Безопасность Server Action не появляется автоматически. Action доступна как server endpoint, поэтому внутри всё равно нужны validation, authorization, rate limiting при необходимости и аккуратная работа с errors. Нельзя доверять client-side disabled-кнопкам, скрытым inputs или типам TypeScript. Типы помогают разработчику, но runtime-вход остаётся внешними данными.
+Route Handler экспортирует functions по HTTP method: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`. Он не участвует в layouts и client navigation как `page.tsx`. В Next.js 14 `GET`, возвращающий обычный `Response`, может кешироваться по default; request object, dynamic APIs или route config позволяют выбрать dynamic behavior.
 
-После мутации часто нужно обновить cache. Если изменилась конкретная страница, используют `revalidatePath`. Если данные переиспользуются в разных местах, удобнее tag-based invalidation через `revalidateTag`. Если после записи пользователь должен уйти на другую страницу, можно вызвать `redirect`.
+#### Развернутый ответ
 
-Route Handler нужен, когда важен HTTP layer. Он живёт в `app/api/.../route.ts` или другом route segment и экспортирует функции `GET`, `POST`, `PUT`, `DELETE` и т.д. Handler работает с `Request`, `NextRequest`, `Response`, `NextResponse`, headers, cookies, status codes, body, CORS. Для webhook чаще выбирают Route Handler, потому что внешний сервис не умеет вызывать Server Action как React-интеграцию.
+**Security.** Server Action доступна через generated endpoint, даже если UI временно не показывает кнопку. Внутри каждый вызов заново проверяет session и право на конкретный resource, затем валидирует данные schema-validator. TypeScript types, hidden inputs и client-side validation не являются security checks. Для дорогих/чувствительных operations добавляют rate limiting, idempotency или audit trail по требованиям системы.
 
-Route Handlers и Server Actions не заменяют backend полностью. В production они могут быть BFF-слоем: проверка auth, нормализация API, сокрытие токенов, агрегация нескольких backend-запросов. Бизнес-критичную server logic выносят в отдельные service-функции и вызывают из action/handler, чтобы не дублировать правила.
+**UI flow.** Native form способен вызвать action без собственного `onSubmit`; это поддерживает progressive enhancement. Client Component может показывать pending через `useFormStatus` и отображать validation result через action state. После записи инвалидируют data tag/path, затем при необходимости вызывают `redirect`. `redirect` управляет control flow через исключение Next.js, поэтому его не помещают внутрь `try/catch`, который должен обработать только ожидаемую ошибку записи.
 
-После RSC security advisories Server Actions стоит воспринимать как полноценные server endpoints. Для Next.js 14.x важно держать patched framework version, а внутри actions всё равно проверять auth, authorization, schema validation, rate limiting для чувствительных операций и не хранить секреты в исходном коде функции.
+**HTTP flow.** Route Handler явно управляет method, status, headers и body. Webhook обычно требует прочитать raw body и проверить provider signature до parsing/processing. Public endpoint нуждается в versioned contract, CORS policy и rate limits. Ошибка Route Handler возвращается как HTTP response и не попадает автоматически в ближайший `error.tsx` page.
+
+**Shared logic.** Actions и handlers являются adapters. Authentication, schema validation и business operation удобно вынести в server-only service и вызывать из обоих entry points. Server Component не должен делать HTTP request к собственному Route Handler только ради повторного использования: прямой вызов service function короче, быстрее и сохраняет types.
+
+**Version boundary.** Server Actions стали stable в Next.js 14, но детали transport и security patches принадлежат framework implementation. Для линии 14.x используют patched release `14.2.35`; обновление framework не отменяет application-level authorization.
 
 #### Где применяется во frontend
 
@@ -49,14 +53,6 @@ Route Handlers и Server Actions не заменяют backend полность�
 | UI mutation + обновить кеш страницы | Server Action + `revalidatePath`/`revalidateTag` |
 | Download/stream файла | Route Handler |
 | Общая бизнес-логика | service function, вызываемая из action/handler |
-
-> [!faq]+ Уточнения
-> - Server Action в Next.js 14 стабильна, но входные данные всё равно валидируют на сервере.
-> - Route Handler используют, когда нужен HTTP endpoint или интеграция с внешней системой.
-> - `revalidatePath` обновляет path, `revalidateTag` обновляет данные по tag.
-> - На одном route segment нельзя одновременно иметь `page.tsx` и `route.ts` для одного endpoint.
-> - Server Action не подходит как публичный REST API для сторонних клиентов.
-> - Server Action - это server boundary, поэтому TypeScript-типы не заменяют runtime validation.
 
 #### Пример
 
@@ -70,13 +66,14 @@ import { revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 
 export async function createProduct(formData: FormData) {
+  const user = await requireUser();
   const title = String(formData.get("title") ?? "").trim();
 
   if (!title) {
     return { error: "Title is required" };
   }
 
-  await saveProduct({ title });
+  await saveProduct({ title, authorId: user.id });
   revalidateTag("products");
   redirect("/products");
 }
@@ -107,13 +104,16 @@ export async function GET() {
 }
 ```
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Выносить любую мутацию в Route Handler, хотя она вызывается только из формы.
-- Делать Server Action без server-side validation и authorization.
-- Возвращать из action неserializable значения.
-- Забывать revalidation после записи и видеть старые данные.
-- Использовать Server Action как public API contract для внешних клиентов.
+- Server Action — UI-oriented server reference; Route Handler — явный HTTP contract.
+- Оба entry points принимают недоверенный input и выполняют authorization для каждого вызова.
+- Server Action может работать с progressive form, pending/result state и cache revalidation без отдельного client API layer.
+- Route Handler выбирают для external clients, webhooks, streams и точного управления HTTP semantics.
+- Server-side code переиспользует service function напрямую, а не обращается к собственному Route Handler по HTTP.
+- `revalidateTag` обновляет связанные data entries, `revalidatePath` — route path/layout; выбор следует фактической dependency.
+- `redirect` завершается специальным control-flow exception, поэтому его вызывают после ожидаемо обрабатываемого участка.
+- `page.tsx` и `route.ts` не могут занимать один и тот же route segment.
 
 #### Связанные темы
 

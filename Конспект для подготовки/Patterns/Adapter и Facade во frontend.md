@@ -8,59 +8,58 @@ aliases:
   - фасад
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Adapter и Facade помогают отделить приложение от неудобных внешних интерфейсов. Adapter приводит один интерфейс к другому: например, backend DTO со `snake_case` превращается в frontend-модель с `camelCase`, а SDK с нестандартным callback API превращается в Promise-based service. Facade даёт простой вход к сложной подсистеме: например, `authService.login()` скрывает refresh, cookies, headers, error mapping и storage.
+Adapter («Адаптер») преобразует интерфейс одной сущности в контракт, который ожидает приложение. Например, он превращает DTO с `snake_case` в внутреннюю модель или callback API стороннего SDK в `Promise`.
 
-Во frontend эти паттерны особенно полезны на границах: API layer, analytics SDK, payment SDK, auth, feature flags, browser APIs, date libraries, form adapters, generated clients. Компоненты не должны знать детали каждого внешнего контракта.
-
-Главная разница: Adapter меняет форму интерфейса, Facade упрощает доступ к сложной системе. На практике они часто работают вместе: facade вызывает adapter внутри.
+Facade («Фасад») предоставляет небольшой согласованный API к более сложной подсистеме. Например, `authService.login()` может скрывать HTTP-запрос, нормализацию ошибок и обновление сессии. Adapter меняет форму взаимодействия, Facade уменьшает число деталей, с которыми работает вызывающий код; внутри одного Facade могут использоваться несколько adapters.
 
 #### Ключевая схема
 
-| Паттерн | Что делает | Frontend-пример |
+| Паттерн | Исходная проблема | Результат |
 | --- | --- | --- |
-| Adapter | приводит внешний интерфейс к внутреннему контракту | `ApiUserDto -> User` |
-| Facade | скрывает сложность подсистемы за простым API | `authService.login()` |
-| DTO mapper | частный случай adapter | `full_name -> name` |
-| SDK wrapper | facade/adapter вокруг сторонней библиотеки | `analytics.track(event)` |
+| Adapter | внешний интерфейс несовместим с внутренним | совместимый контракт |
+| Facade | подсистема требует знать много участников и шагов | единая точка входа для типового сценария |
 
 ```text
-Component
--> app service/facade
--> adapter/mapper
--> external API/SDK/browser
+component/use case
+-> facade приложения
+-> adapter или mapper
+-> проверенный внешний API, SDK или browser API
 ```
+
+#### Базовая модель
+
+Adapter располагается на границе двух контрактов. Его задача - перевести названия, структуру, типы или способ вызова, сохранив смысл операции. Для DTO это может быть преобразование `created_at: string` в `createdAt: Date`; для callback API - обёртка, которая завершает `Promise` при вызове callback.
+
+Facade располагается перед подсистемой. Он координирует несколько участников и даёт вызывающему коду операции на языке приложения: `loadCurrentUser`, `trackPurchase`, `openCheckout`. Компонент знает назначение операции, но не знает порядок вызовов внутренних клиентов.
+
+Оба паттерна уменьшают связанность с внешней реализацией. Если меняется DTO, исправляется adapter; если меняется последовательность auth flow, исправляется Facade. Это работает только тогда, когда наружу не протекают типы, исключения и детали заменяемой системы.
 
 #### Развернутый ответ
 
-Adapter нужен, когда внешний контракт не совпадает с внутренней моделью приложения. Backend может отдавать `created_at`, `full_name`, вложенные объекты, nullable fields или enum-значения, которые неудобны UI. Adapter превращает это в стабильную frontend-модель: `createdAt`, `name`, подготовленные даты, нормализованные статусы.
+**Adapter и проверка данных.** TypeScript-тип не проверяет JSON во время выполнения. Сначала внешний ответ разбирают и убеждаются, что он имеет допустимую структуру, затем adapter преобразует проверенный DTO во внутреннюю модель. Иногда эти шаги объединены одной parser-функцией, но у них разные задачи: validation отвергает некорректные данные, adaptation меняет корректный контракт.
 
-Facade нужен, когда за простым действием стоит сложная последовательность. Например, login может включать request, refresh token policy, сохранение user state, обработку `401/422`, очистку query cache и analytics event. Компоненту формы не нужно знать всю эту механику; ему нужен понятный метод `login(credentials)`.
+**Adapter и бизнес-логика.** Переименование полей, нормализация nullable-значений и преобразование формата даты относятся к границе данных. Решение «может ли пользователь отменить заказ» зависит от правил предметной области и не должно случайно прятаться в DTO mapper.
 
-Эти паттерны уменьшают связность. Если поменялся backend DTO, правится mapper. Если поменялся analytics provider, правится wrapper. Если поменялась auth-схема, правится `authService`, а не десятки компонентов.
+**Граница Facade.** Facade закрывает одну связную подсистему или сценарий. `analytics`, `auth` и `payments` обычно требуют разных facade. Один `appService` со всеми методами создаёт центральную зависимость, которую трудно изменять и тестировать.
 
-Важно не делать facade “божественным сервисом”. Если один `appService` знает auth, payments, profile, notifications и routing, он становится новой точкой сильной связности. Facade должен закрывать понятную подсистему.
+**Компромисс.** Дополнительный слой требует кода и именования. Для стабильного локального API прямой вызов может быть понятнее. Adapter или Facade оправдан, когда внешняя деталь уже повторяется, меняется независимо, затрудняет тестирование или не должна определять внутреннюю модель приложения.
 
 #### Где применяется во frontend
 
-| Ситуация в проекте | Что не так без паттерна | Как применить |
+| Ситуация | Решение | Практический результат |
 | --- | --- | --- |
-| Компоненты читают `user.full_name` прямо из API response | внешний DTO протекает в UI | Adapter: `mapUserDto(dto): User` |
-| В каждом компоненте повторяется обработка `401`, `403`, `422` | error policy размазана по UI | Facade/API client: единый `request` мапит ошибки в понятные app errors |
-| Analytics SDK меняется с GA на Amplitude | весь UI зависит от конкретного SDK API | Facade: `analytics.track(name, payload)` скрывает provider |
-| Payment SDK работает через callbacks | UI хочет Promise/async-await | Adapter: обернуть callback API в Promise-based interface |
-| Browser storage используется напрямую в разных местах | ключи, parsing и fallback повторяются | Facade: `settingsStorage.getTheme()` / `setTheme()` |
-| OpenAPI сгенерировал DTO, неудобный для компонента | generated type отражает backend, а не UI-модель | Adapter: generated DTO мапится в domain/view model |
-
-> [!faq]+ Уточнения
-> - Adapter меняет форму интерфейса, Facade упрощает работу со сложной подсистемой.
-> - DTO mapper - частый frontend-Adapter.
-> - API client/service часто является Facade для transport, auth, errors и validation.
-> - Wrapper вокруг SDK уменьшает vendor lock-in.
-> - Facade не должен становиться огромным глобальным сервисом на всё приложение.
+| Backend отдаёт `full_name` и `avatar_url` | DTO adapter | компоненты работают со стабильными `name` и `avatarUrl` |
+| SDK использует callbacks | adapter в `Promise` API | use case использует обычный `async/await` |
+| Analytics provider имеет собственные event types | Facade `analytics.track` | замена SDK не затрагивает компоненты |
+| Авторизация состоит из нескольких запросов и обновлений cache | Auth Facade | UI запускает один понятный сценарий |
+| `localStorage` используется в разных модулях | storage Facade | ключи, JSON parsing и fallback определены один раз |
+| OpenAPI-клиент отражает транспортный контракт | adapter в domain/view model | сгенерированные типы не распространяются по JSX |
 
 #### Пример
+
+Adapter преобразует уже проверенный DTO во внутреннюю модель:
 
 ```ts
 type ApiUserDto = {
@@ -75,6 +74,31 @@ type User = {
   avatarUrl: string | null;
 };
 
+type UserApi = {
+  getCurrentUser(): Promise<unknown>;
+};
+
+function parseApiUserDto(value: unknown): ApiUserDto {
+  if (typeof value !== "object" || value === null) {
+    throw new Error("Invalid user response");
+  }
+
+  const dto = value as Record<string, unknown>;
+  if (
+    typeof dto.id !== "number" ||
+    typeof dto.full_name !== "string" ||
+    (typeof dto.avatar_url !== "string" && dto.avatar_url !== null)
+  ) {
+    throw new Error("Invalid user response");
+  }
+
+  return {
+    id: dto.id,
+    full_name: dto.full_name,
+    avatar_url: dto.avatar_url,
+  };
+}
+
 function mapUserDto(dto: ApiUserDto): User {
   return {
     id: dto.id,
@@ -83,29 +107,33 @@ function mapUserDto(dto: ApiUserDto): User {
   };
 }
 
-class UserService {
-  async getCurrentUser() {
-    const dto = await request<ApiUserDto>("/api/me");
-    return mapUserDto(dto);
-  }
+function createUserFacade(api: UserApi) {
+  return {
+    async getCurrentUser(): Promise<User> {
+      const json: unknown = await api.getCurrentUser();
+      const dto = parseApiUserDto(json);
+      return mapUserDto(dto);
+    },
+  };
 }
 ```
 
-Компонент получает `User` и не знает про `full_name`/`avatar_url`.
+`parseApiUserDto` проверяет внешние данные, `mapUserDto` меняет их форму, а Facade задаёт единый сценарий получения пользователя. Компонент получает `User` и не зависит от структуры ответа API.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Протаскивать DTO глубоко в JSX.
-- Называть любой helper фасадом.
-- Делать один общий facade для всего приложения.
-- Прятать в adapter бизнес-логику, которая должна быть в domain/use-case.
-- Оборачивать SDK, но всё равно отдавать наружу SDK-specific types.
+- Adapter отвечает за совместимость контрактов, а Facade - за упрощённый доступ к подсистеме. Они могут использоваться вместе, но не являются синонимами.
+- Приведение `response as ApiUserDto` не проверяет backend-ответ. Runtime-проверка выполняется до безопасной адаптации данных.
+- Хороший wrapper не возвращает наружу специфичные типы и ошибки SDK, от которого должен изолировать приложение.
+- Facade не обязан скрывать каждую возможность подсистемы. Он предоставляет только устойчивые операции, нужные приложению.
+- Дополнительная прослойка оправдана реальной границей изменений; локальный helper не становится полезнее только из-за названия `Adapter`.
 
 #### Связанные темы
 
 - [[Конспект для подготовки/Architecture/API слой и контракты]]
 - [[Конспект для подготовки/TypeScript/Проверка данных с backend]]
 - [[Конспект для подготовки/Patterns/Strategy во frontend]]
+- [[Конспект для подготовки/Patterns/Factory Singleton и lifecycle]]
 - [[Конспект для подготовки/Principles/SOLID во frontend]]
 - [[Конспект для подготовки/Web Basics/OpenAPI и Swagger]]
 - [[Конспект для подготовки/JavaScript/Fetch и работа с API]]
@@ -113,5 +141,6 @@ class UserService {
 
 #### Источники
 
-- Design Patterns: Elements of Reusable Object-Oriented Software
-- [Martin Fowler: Patterns of Enterprise Application Architecture](https://martinfowler.com/books/eaa.html)
+- Erich Gamma et al. Design Patterns: Elements of Reusable Object-Oriented Software
+- [Martin Fowler: Data Transfer Object](https://martinfowler.com/eaaCatalog/dataTransferObject.html)
+- [Martin Fowler: Gateway](https://martinfowler.com/eaaCatalog/gateway.html)

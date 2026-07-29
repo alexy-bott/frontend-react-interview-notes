@@ -7,65 +7,67 @@ aliases:
   - lifecycle services
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Factory - это паттерн создания объектов или сервисов через отдельную функцию/метод, а не вручную в каждом месте. Singleton - это один общий экземпляр на приложение или процесс. Во frontend эти темы часто всплывают вокруг API clients, SDK, analytics, WebSocket connections, stores, feature flag clients, i18n и browser-only services.
+Factory («Фабрика») централизует создание объекта и его зависимостей: функция `createApiClient(config)` решает, как собрать клиент, но не обязана определять срок его жизни. Singleton («Одиночка») гарантирует один экземпляр в выбранной области, например на одну SPA-сессию, серверный процесс или запрос.
 
-Factory полезна, когда создание зависит от env, runtime config, auth token, platform, test mock или SSR/client boundary. Singleton может быть удобен для общего client-а, но опасен в SSR, тестах и multi-user окружении: общий экземпляр может случайно хранить состояние между запросами или тестами.
-
-Главное правило: создание и lifecycle должны быть явными. Нужно понимать, где создаётся client, кто его переиспользует, когда он очищается, можно ли заменить его в тесте и не протекает ли состояние между пользователями.
+Во frontend важнее не название паттерна, а явный lifecycle: где экземпляр создаётся, кто им владеет, между кем он разделяется и когда очищается. Один browser-level клиент может быть уместен для аналитики или query cache, но module-level объект с пользовательскими данными опасен в SSR, потому что один серверный процесс обслуживает разные запросы.
 
 #### Ключевая схема
 
-| Паттерн | Что решает | Риск |
+```text
+factory + dependencies
+-> create instance
+-> composition root выбирает scope
+-> consumers используют instance
+-> owner выполняет cleanup
+```
+
+| Scope экземпляра | Типичный владелец | Пример |
 | --- | --- | --- |
-| Factory | централизует создание зависимости | лишняя абстракция для простого объекта |
-| Singleton | даёт один общий instance | глобальное состояние, сложные тесты, SSR leaks |
-| Provider | отдаёт instance через React/Vue context | нужно следить за lifecycle |
-| Composition root | место сборки зависимостей | не размазывать creation по компонентам |
+| Вызов функции | вызывающий код | parser или короткоживущий worker |
+| Компонент/feature | component или route | editor controller |
+| Пользовательская сессия | auth/session provider | WebSocket connection |
+| Browser-приложение | composition root SPA | analytics client, query client |
+| Серверный запрос | request handler | query cache с user data при SSR |
+| Серверный процесс | module/runtime | только stateless или process-safe dependency |
+
+#### Базовая модель
+
+Factory отвечает на вопрос «как создать?». Она принимает configuration и зависимости, выполняет согласованную настройку и возвращает объект с нужным контрактом. Каждый вызов может создать новый экземпляр, но код вправе вызвать factory один раз и переиспользовать результат.
+
+Singleton отвечает на вопрос «сколько экземпляров существует в данной области?». Слово «один» бессмысленно без указания scope. Module-level export обычно один для конкретного загруженного module graph, но другая вкладка, worker, server process или отдельная копия bundle получит собственный экземпляр.
+
+Composition root - место, где приложение создаёт и связывает основные зависимости. В SPA это может быть bootstrap-файл перед `createRoot`; в SSR - код обработки запроса. Он вызывает factories, выбирает scope и передаёт экземпляры через параметры, provider или context.
 
 #### Развернутый ответ
 
-Factory появляется, когда объект нельзя просто создать inline. Например, API client должен знать base URL, headers, credentials, refresh policy и logger. Если каждый компонент создаёт его сам, настройки начнут расходиться. Factory собирает зависимость в одном месте: `createApiClient(config)`.
+**Конфигурация и зависимости.** Factory полезна, когда клиент зависит от `baseUrl`, способа получения token, logger, `fetch` или runtime environment. Явные параметры позволяют создать production-реализацию и отдельную test-реализацию без изменения глобальных переменных.
 
-Singleton часто возникает естественно: `analytics`, `queryClient`, `featureFlagClient`, `i18n`, `socket`. Проблема не в самом единственном экземпляре, а в скрытом mutable state. В SPA singleton может быть нормальным, если это действительно app-level dependency. В SSR один module-level singleton может стать багом, если хранит user-specific данные между запросами.
+**Скрытое изменяемое состояние.** Основной риск Singleton возникает, когда общий объект хранит cache, текущего пользователя, выбранный workspace или активные подписки. Изменение видят все consumers, а тесты и параллельные запросы влияют друг на друга. Stateless formatter или неизменяемая configuration создают меньше риска, хотя scope всё равно должен быть понятен.
 
-В тестах singleton мешает изоляции. Если один тест поменял глобальный client, следующий тест может получить загрязнённое состояние. Поэтому для тестируемости зависимости часто передают через provider, параметры функции или factory, которая создаёт fresh instance для каждого теста.
+**SSR.** Серверный module-level объект может жить дольше одного HTTP-запроса. Если query client или service хранит user-specific данные, следующий запрос способен получить чужой cache. Такие зависимости создают на каждый request и передают вниз. Общий connection pool допустим, если его библиотека рассчитана на process-wide совместное использование и не хранит контекст конкретного пользователя.
 
-Factory и Singleton часто комбинируются: factory создаёт instance, а composition root решает, будет он singleton на всё приложение или отдельным для запроса/теста. Так lifecycle становится управляемым, а не случайным.
+**Lifecycle ресурса.** WebSocket, observer, timer и SDK могут требовать `close`, `unsubscribe` или `dispose`. Создатель не всегда является владельцем. Если соединение принадлежит auth-сессии, session provider создаёт его после login и закрывает при logout; если оно принадлежит экрану, cleanup выполняет владелец экрана.
 
-#### Где применяется во frontend
-
-| Ситуация в проекте | Что создаётся | Какой подход выбрать |
-| --- | --- | --- |
-| API client зависит от base URL и auth policy | HTTP client/service | factory `createApiClient(config)` в app setup |
-| React Query использует `QueryClient` | cache client | singleton на SPA, fresh instance для SSR/request/tests |
-| Analytics SDK должен инициализироваться один раз | analytics client | singleton/facade, но без user-specific state внутри module global |
-| WebSocket соединение зависит от пользователя | realtime connection | создавать при login/session и закрывать при logout/unmount |
-| Feature flags зависят от env и user | flags client | factory + provider, чтобы обновлять user context |
-| Unit-тест должен заменить backend | mock service | factory/provider позволяет подставить fake implementation |
-
-> [!faq]+ Уточнения
-> - Factory не обязана быть классом; во frontend это часто обычная функция `createX`.
-> - Singleton в SPA допустим для app-level services, если lifecycle понятен.
-> - В SSR нельзя бездумно хранить user-specific state в module-level singleton.
-> - Provider/context часто используется как способ передать созданную зависимость.
-> - Для тестов удобно создавать fresh instance через factory.
+**Тестирование.** Factory позволяет получать fresh instance для каждого теста и передавать fake dependencies. Singleton, импортированный напрямую, вынуждает сбрасывать module cache или внутреннее состояние. Поэтому даже единственный экземпляр приложения удобнее создавать в composition root и передавать по контракту, чем скрывать внутри модуля.
 
 #### Пример
 
+Factory собирает API client из явных зависимостей и не решает, сколько раз её вызвать:
+
 ```ts
-type ApiClientConfig = {
+type ApiClientDependencies = {
   baseUrl: string;
   getToken(): string | null;
+  fetch: typeof fetch;
 };
 
-function createApiClient(config: ApiClientConfig) {
+function createApiClient(deps: ApiClientDependencies) {
   return {
-    async get<T>(path: string): Promise<T> {
-      const token = config.getToken();
-
-      const response = await fetch(`${config.baseUrl}${path}`, {
+    async get(path: string): Promise<unknown> {
+      const token = deps.getToken();
+      const response = await deps.fetch(`${deps.baseUrl}${path}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
@@ -73,21 +75,21 @@ function createApiClient(config: ApiClientConfig) {
         throw new Error(`Request failed: ${response.status}`);
       }
 
-      return response.json() as Promise<T>;
+      return response.json();
     },
   };
 }
 ```
 
-В приложении можно создать один client, а в тесте - отдельный mock/fake client.
+SPA может вызвать `createApiClient` один раз при bootstrap. SSR-приложение может вызвать её для каждого запроса с request-specific auth context. Метод возвращает `unknown`, потому что factory не отменяет необходимость проверять внешний JSON.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Создавать API client прямо внутри компонента на каждый render.
-- Использовать module-level singleton для user-specific state в SSR.
-- Не очищать WebSocket/SDK subscriptions при logout или unmount.
-- Делать singleton, который невозможно заменить в тестах.
-- Прятать слишком много логики в factory вместо явного service/use-case.
+- Factory управляет созданием, а Singleton - количеством экземпляров в конкретном scope. Вызов factory один раз может создать singleton, но паттерны решают разные вопросы.
+- Module-level export не означает «один на весь мир»: границы вкладки, worker, bundle и server process создают разные module graphs.
+- В SSR общий объект безопасен только тогда, когда не смешивает состояние разных запросов либо специально рассчитан на такое использование.
+- Provider передаёт зависимость, но не обязан её создавать. Место создания и владелец cleanup должны быть определены отдельно.
+- Ресурс закрывает владелец его lifecycle, а не случайный последний компонент, который получил ссылку.
 
 #### Связанные темы
 
@@ -102,5 +104,6 @@ function createApiClient(config: ApiClientConfig) {
 
 #### Источники
 
-- Design Patterns: Elements of Reusable Object-Oriented Software
+- Erich Gamma et al. Design Patterns: Elements of Reusable Object-Oriented Software
 - [Martin Fowler: Inversion of Control Containers and the Dependency Injection pattern](https://martinfowler.com/articles/injection.html)
+- [React: Passing data deeply with context](https://react.dev/learn/passing-data-deeply-with-context)

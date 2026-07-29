@@ -6,71 +6,65 @@ aliases:
   - server errors form
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Форма проектируется вокруг жизненного цикла submit: values, touched/dirty, sync validation, async validation, pending state, API request, server errors, success state и reset/navigation. Для крупной формы важно разделить UI полей, form state, schema, mapping values -> DTO, API request и mapping backend errors -> field/form errors.
+Форма с асинхронной валидацией и серверными ошибками проектируется как последовательность состояний: ввод, локальная проверка, необязательная проверка через API, отправка, обработка ответа и завершение сценария. Значения формы отделяют от DTO запроса, быстрые правила проверяют на клиенте, а сервер повторно проверяет все ограничения, влияющие на корректность и безопасность данных.
 
-Async validation нужна, когда правило зависит от сервера или внешнего состояния: уникальность email, доступность username, промокод, права пользователя. Её нельзя смешивать с каждым keystroke без debounce/cancellation, иначе появятся race conditions и лишняя нагрузка. Server errors после submit нужно маппить в поля или form-level summary.
-
-Хорошая форма отвечает на вопросы: где живёт draft, что валидируется на клиенте, что на сервере, как показываются ошибки, что блокируется во время submit, как работает accessibility и как тестируется сценарий.
+Асинхронную проверку при вводе добавляют только тогда, когда ранний ответ действительно помогает пользователю, например для доступности username. Её защищают от лишних запросов и устаревших ответов. Ошибки submit разделяют на ошибки конкретных полей, общую ошибку формы, конфликт данных и системный сбой, чтобы интерфейс мог показать понятное действие для каждого случая.
 
 #### Ключевая схема
 
 ```text
-field UI
--> form state
--> sync schema validation
--> async validation
--> map values to DTO
--> submit request
--> map server errors
--> success/reset/navigation
+значения формы
+-> локальная проверка
+-> необязательная async-проверка
+-> преобразование values в DTO
+-> submit
+-> успешный ответ | ошибки полей | конфликт | системная ошибка
+-> обновление UI, focus и дальнейшая навигация
 ```
 
-| Часть | Что решить |
+| Слой | Ответственность |
 | --- | --- |
-| Form state | values, touched, dirty, errors |
-| Sync validation | required, format, min/max, local rules |
-| Async validation | debounce, cancellation, stale response |
-| Submit | pending, disabled, retry, idempotency |
-| Server errors | field errors, form errors, conflict |
-| Accessibility | labels, aria-invalid, describedby, focus |
-| Testing | user flow, validation, server errors |
+| Поля | ввод, label, подсказка, отображение связанной ошибки |
+| Form state | values, touched, dirty, errors, submit status |
+| Схема | локальные и межполевые правила, не требующие сервера |
+| Mapper | преобразование значений формы в API DTO и обратно |
+| API | запрос, отмена, нормализация ответа и ошибок |
+| Сервер | окончательная проверка прав, уникальности и бизнес-правил |
+
+#### Базовая модель
+
+**Синхронная клиентская валидация** сразу проверяет сведения, уже доступные браузеру: обязательность, формат, длину, диапазон или совпадение двух полей. Она сокращает цикл обратной связи, но не является границей безопасности: запрос можно отправить без интерфейса, а данные на сервере могли измениться.
+
+**Асинхронная клиентская валидация** обращается к API до основного submit. Она полезна для ранней подсказки, но её результат быстро устаревает. Username мог быть свободен во время ввода и занят другим пользователем до отправки формы. Поэтому сервер обязан повторить ту же бизнес-проверку при submit.
+
+**Серверная ошибка** - не одно состояние. Backend может вернуть ошибку поля, общий запрет операции, конфликт с более свежими данными, отсутствие авторизации или временный технический сбой. Frontend нормализует эти ответы в собственную модель, а затем связывает каждый тип с понятным сообщением и следующим действием.
 
 #### Развернутый ответ
 
-Form values не всегда совпадают с API DTO. Input почти всегда даёт строки, а API может ждать number, ISO date, nullable field, enum или nested object. Поэтому mapping values -> DTO держат на границе submit/API, а не размазывают по JSX.
+**Значения формы и DTO.** HTML-input обычно возвращает строку, тогда как API может ожидать число, `null`, ISO-дату, enum или вложенный объект. Значения, удобные для редактирования, преобразуют в DTO на границе submit. При редактировании существующей сущности обратный mapper превращает API-ответ в начальные значения формы.
 
-Client validation закрывает быстрые правила: required, format, min length, range, matching fields. Server validation остаётся источником истины для уникальности, прав, конфликтов, бизнес-ограничений и данных, которые могли измениться после открытия формы.
+**Момент показа ошибок.** Ошибку формата можно проверить при вводе, но немедленное отображение до взаимодействия с полем часто создаёт шум. Распространённая политика - показывать локальную ошибку после blur или первой попытки submit, а затем обновлять её при вводе. Это UX-решение, а не универсальное правило библиотеки.
 
-Async validation требует контроля гонок. Если пользователь вводит username, запрос на `alex` может вернуться позже запроса на `alex1`. UI не должен показывать устаревшую ошибку. Используют debounce, request id, AbortController или возможности form/query library.
+**Асинхронная проверка.** Запрос запускают только для локально допустимого значения. Debounce может сократить число обращений, а `AbortController`, счётчик запроса или механизм библиотеки защищает от ситуации, когда поздний ответ для старого значения перезаписывает результат нового. При смене значения прежний успех больше не считается актуальным.
 
-Server errors нужно нормализовать. `422` может содержать field errors, `409` - conflict, `403` - access denied, network error - retry/fallback. Field errors мапятся в конкретные поля, form-level errors показываются в summary, а критичные ошибки могут вести к отдельному экрану.
+**Submit.** Во время отправки интерфейс сообщает о процессе и предотвращает случайный повтор, если операция не должна дублироваться. Однако disabled-кнопка на клиенте не гарантирует однократность операции: сеть может повторить запрос, а пользователь - открыть другую вкладку. Для критичных операций backend использует идемпотентность или собственную защиту от дублей.
 
-Для accessibility ошибка должна быть связана с полем: label, `aria-invalid`, `aria-describedby`, понятный текст, focus на первую ошибку после submit. Disabled submit должен не мешать screen reader feedback; pending state должен быть видимым.
+**Ошибки ответа.** Ошибка поля связывается с соответствующим input. Общая ошибка формы показывается в summary или рядом с submit. `409 Conflict` может потребовать обновить данные и повторить решение пользователя. `401` запускает согласованный auth flow, `403` сообщает об отсутствии права, а сетевой или `5xx` сбой обычно допускает повтор без потери введённых значений.
 
-#### Где применяется во frontend
-
-| Ситуация в проекте | Что проектируется | Конкретное решение |
-| --- | --- | --- |
-| Username должен быть уникальным | async validation зависит от backend | debounce + cancellation + показ stale-safe результата |
-| Backend возвращает `{ field: "email", message: "Already used" }` | ошибку нужно показать у поля | mapper server errors -> `setError("email", ...)` |
-| Форма редактирует профиль из API | DTO и form values отличаются | `mapUserToFormValues` и `mapFormValuesToDto` |
-| Submit занимает несколько секунд | пользователь должен видеть процесс | pending state, disabled duplicate submit, spinner/text |
-| Мультишаговая форма переживает reload | draft state должен сохраняться | store/session storage/backend draft, стратегия восстановления |
-| После ошибки submit фокус остаётся неизвестно где | accessibility ломается | focus на первую ошибку или error summary |
-
-> [!faq]+ Уточнения
-> - Client validation улучшает UX, server validation остаётся источником истины.
-> - Async validation требует debounce и защиты от stale responses.
-> - Server errors делят на field-level и form-level.
-> - Form values и API DTO лучше маппить явно.
-> - Большую форму делят на секции, но owner form state должен быть понятен.
-> - Тестировать нужно пользовательское поведение, а не внутренности form library.
+**Доступность.** У поля остаётся видимый `label`; ошибка связывается с ним через `aria-describedby`, а недопустимое состояние отмечается `aria-invalid`. После неуспешного submit focus переводят на первую ошибку или на summary со ссылками на поля. Сообщение не должно полагаться только на красный цвет.
 
 #### Пример
 
+Внутренняя модель ошибок позволяет не привязывать форму к формату конкретного backend:
+
 ```ts
+type FormIssue =
+  | { kind: "field"; field: "email" | "displayName"; message: string }
+  | { kind: "form"; message: string }
+  | { kind: "conflict"; message: string };
+
 type ProfileFormValues = {
   displayName: string;
   birthday: string;
@@ -81,29 +75,23 @@ type UpdateProfileDto = {
   birthday_iso: string | null;
 };
 
-function mapProfileFormToDto(values: ProfileFormValues): UpdateProfileDto {
+function toUpdateProfileDto(values: ProfileFormValues): UpdateProfileDto {
   return {
     display_name: values.displayName.trim(),
     birthday_iso: values.birthday || null,
   };
 }
-
-function mapServerErrorsToFormErrors(error: ApiValidationError) {
-  return error.fields.map(fieldError => ({
-    name: fieldError.path,
-    message: fieldError.message,
-  }));
-}
 ```
 
-#### Частые ошибки
+Компонент формы работает с `FormIssue`, а API-слой преобразует в него `422`, `409` и другие ожидаемые ответы. Неизвестную структуру ответа нельзя без проверки приводить к этому типу: данные от backend остаются внешними данными и требуют runtime-валидации или защитного разбора.
 
-- Отправлять form values как DTO без mapping.
-- Делать async validation на каждый символ без debounce/cancellation.
-- Показывать stale error от старого запроса.
-- Смешивать field errors и form-level errors.
-- Блокировать submit без понятного pending feedback.
-- Не связывать error text с полем через accessibility-атрибуты.
+#### Ключевые уточнения
+
+- Серверная валидация является окончательной для прав, уникальности и бизнес-ограничений. Клиентская проверка ускоряет обратную связь, но не заменяет её.
+- Асинхронная проверка при вводе не обязательна для каждого серверного правила. Иногда достаточно проверить значение один раз при submit и корректно показать ответ.
+- Debounce уменьшает частоту запросов, а отмена или проверка актуальности ответа предотвращает гонку. Эти механизмы решают разные задачи.
+- Блокировка submit уменьшает случайные повторы в интерфейсе, но однократность критичной операции обеспечивает серверный контракт.
+- Значения формы, DTO запроса и доменная модель могут различаться; явные mapper-функции делают эту границу проверяемой.
 
 #### Связанные темы
 
@@ -118,6 +106,6 @@ function mapServerErrorsToFormErrors(error: ApiValidationError) {
 
 #### Источники
 
-- [React Hook Form docs](https://react-hook-form.com/)
-- [MDN: Client-side form validation](https://developer.mozilla.org/en-US/docs/Learn/Forms/Form_validation)
-- [WAI: Forms Tutorial](https://www.w3.org/WAI/tutorials/forms/)
+- [MDN: Client-side form validation](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Forms/Form_validation)
+- [W3C WAI: Forms Tutorial](https://www.w3.org/WAI/tutorials/forms/)
+- [React Hook Form: Documentation](https://react-hook-form.com/)

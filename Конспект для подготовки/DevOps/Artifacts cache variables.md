@@ -6,41 +6,38 @@ aliases:
   - CI artifacts cache
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-В GitLab CI/CD cache и artifacts решают разные задачи. Cache ускоряет jobs: например, переиспользует npm cache между pipeline или jobs. Artifacts передают результат работы job дальше: `dist`, coverage report, junit report, собранный Storybook, bundle analyzer output. Variables хранят конфигурацию pipeline и секреты, но с ними нужно работать аккуратно: protected, masked, environment-scoped, без вывода в logs.
+В GitLab CI/CD `cache`, `artifacts` и `variables` решают разные задачи. Cache повторно использует загружаемые данные и ускоряет jobs, но может отсутствовать в любой момент. Artifacts сохраняют результат job — например, `dist`, coverage или test report — и передают его следующим jobs либо пользователю. Variables передают конфигурацию; чувствительные variables требуют отдельной модели доступа.
 
-Коротко: cache - оптимизация скорости, artifacts - результат работы, variables - конфигурация и секреты. Если это перепутать, pipeline становится либо медленным, либо нестабильным, либо опасным.
+Практическая проверка проста: без cache job должен остаться корректным, без нужного artifact следующий job не сможет продолжить delivery, а secret variable не должна оказаться ни в одном из этих файлов.
 
 #### Ключевая схема
 
-| Механизм | Для чего | Пример |
+| Механизм | Жизненный цикл | Типичный frontend-пример |
 | --- | --- | --- |
-| `cache` | ускорить повторные jobs | `.npm/`, package manager cache |
-| `artifacts` | передать результат между stages | `dist/`, `coverage/`, reports |
-| `variables` | конфигурация и secrets | `PUBLIC_API_URL`, registry token |
-| `expire_in` | срок жизни artifacts | `1 week`, `30 days` |
-| `protected` | доступ только protected refs | production credentials |
-| `masked` | скрытие значения в logs | tokens/passwords |
+| `cache` | между jobs/pipelines, наличие не гарантировано | npm download cache `.npm/` |
+| `artifacts` | результат конкретного job с retention policy | `dist/`, coverage, JUnit XML |
+| `variables` | значения для pipeline/job/environment | public API URL, deploy token |
+| `needs:artifacts` | явная передача нужного результата | build → deploy |
+
+#### Базовая модель
+
+Cache — это оптимизация. Runner восстанавливает сохранённые paths по key, job выполняется, а затем cache может обновиться согласно `policy`. Cache может быть очищен, не найден или оказаться на другом runner без общего backend. Поэтому dependency install должен скачать недостающее и завершиться корректно даже при cache miss.
+
+Artifact — это зафиксированный output job. GitLab загружает его после выполнения job, хранит заданное время и может скачать в следующий job. Если deploy должен использовать ровно проверенную сборку, `dist` или image reference передают как artifact/release metadata, а не надеются найти в cache.
+
+Variables существуют на разных scopes и имеют precedence. Public build config допустимо передать frontend build, а deploy credentials ограничивают protected ref и нужным environment. Masking скрывает совпавшее значение в log, но job всё ещё способен его прочитать, поэтому недоверенному pipeline секрет не выдают.
 
 #### Развернутый ответ
 
-Cache ускоряет jobs, но не является частью результата. Он может переживать разные pipelines, ускорять `npm ci --cache`, хранить package manager cache, но не гарантирован: runner может быть другой, cache может быть очищен, ключ может измениться. Job должен уметь выполниться и без cache.
+**Cache key.** Key должен меняться, когда меняется содержимое cache. Для npm download cache естественная основа — `package-lock.json`. Часто добавляют package-manager/runtime version или job purpose, если один cache иначе смешает несовместимые данные. GitLab по умолчанию разделяет cache protected и non-protected refs; отключать эту границу следует только в полностью доверенной модели.
 
-Artifacts - результат работы job. Их используют следующие stages или разработчики: скачать build, посмотреть coverage, открыть JUnit reports, забрать bundle analyzer output. Artifacts делают минимальными, задают `expire_in` и не кладут туда секреты.
+**Что кешировать.** Для `npm ci` полезнее `.npm/` — архивы package manager, — чем `node_modules`. `npm ci` всё равно удаляет существующий `node_modules`, а готовое дерево зависит от OS, architecture, Node version и install scripts. Cache не заменяет lockfile.
 
-Cache key для frontend часто строят на основе lockfile. Если lockfile изменился, зависимости должны обновиться; если нет - cache можно переиспользовать. Это безопаснее, чем один общий cache на все ветки и разные package lockfiles.
+**Artifacts.** Сохраняют только то, что понадобится: собранный output, machine-readable reports, source-map upload metadata. `expire_in` ограничивает storage. Секреты, `.env`, registry config и лишнее workspace содержимое в artifacts не включают.
 
-Variables делятся по риску. Public config может быть доступен build job. Production secrets должны быть protected, masked и доступны только protected branches/tags или конкретному environment. Merge request из небезопасной ветки не должен получать deploy credentials.
-
-Masked variables скрывают значение в logs, но не являются абсолютной защитой. Секрет можно записать в файл, artifact, Docker image или отправить наружу ошибочной командой. Поэтому pipeline должен не только маскировать секреты, но и не переносить их в результаты сборки.
-
-> [!faq]+ Уточнения
-> - Cache ускоряет job, artifacts передают результат работы.
-> - Job должен проходить без cache.
-> - Build output передают artifacts, а не cache.
-> - Cache key часто привязывают к lockfile.
-> - Protected/masked variables не должны попадать в logs, artifacts и images.
+**Передача дальше.** Без явных ограничений later-stage jobs могут скачать artifacts предыдущих stages. `needs` позволяет построить DAG и скачать artifacts только указанных jobs; `dependencies` также управляет загрузкой в stage-based pipeline. Явная зависимость делает происхождение deployable output понятнее.
 
 #### Пример
 
@@ -57,15 +54,19 @@ default:
 
 test:
   stage: quality
+  variables:
+    JEST_JUNIT_OUTPUT_DIR: reports
+    JEST_JUNIT_OUTPUT_NAME: junit.xml
   script:
     - npm ci --cache .npm --prefer-offline
-    - npm test -- --ci --coverage
+    # Для JUnit XML в devDependencies установлен reporter jest-junit.
+    - npm test -- --ci --coverage --reporters=default --reporters=jest-junit
   artifacts:
     when: always
     paths:
       - coverage/
     reports:
-      junit: junit.xml
+      junit: reports/junit.xml
     expire_in: 1 week
 
 build:
@@ -77,17 +78,26 @@ build:
     paths:
       - dist/
     expire_in: 1 week
+
+deploy:
+  stage: deploy
+  needs:
+    - job: build
+      artifacts: true
+  script:
+    - ./deploy-static.sh dist/
 ```
 
-#### Частые ошибки
+Здесь JUnit-report объявлен только потому, что test command действительно создаёт XML. `deploy` получает конкретный `dist` от job `build`, а не случайное содержимое cache.
 
-- Использовать artifacts вместо cache для зависимостей.
-- Использовать cache вместо artifacts для build output, который нужен следующему stage.
-- Делать один cache key для разных package lockfiles.
-- Сохранять `.env`, tokens или registry auth в artifacts.
-- Думать, что masked variable можно безопасно печатать.
-- Не задавать `expire_in` для тяжёлых artifacts.
-- Ожидать, что cache всегда доступен на любом runner.
+#### Ключевые уточнения
+
+- Cache ускоряет вычисление, artifact является результатом вычисления.
+- Job обязан корректно работать при cache miss; отсутствие обязательного artifact должно останавливать зависимый job.
+- Key описывает совместимость cache, а не просто имя проекта или ветки.
+- Lockfile фиксирует dependency graph; cache только уменьшает повторные downloads.
+- Report нужно сначала создать подходящим reporter, а затем объявить в `artifacts:reports`.
+- Masked/protected variables нельзя сохранять в cache, artifacts, image layers или client bundle.
 
 #### Связанные темы
 
@@ -101,4 +111,5 @@ build:
 
 - [GitLab Docs: Caching in GitLab CI/CD](https://docs.gitlab.com/ci/caching/)
 - [GitLab Docs: Job artifacts](https://docs.gitlab.com/ci/jobs/job_artifacts/)
+- [GitLab Docs: Artifact reports](https://docs.gitlab.com/ci/yaml/artifacts_reports/)
 - [GitLab Docs: CI/CD variables](https://docs.gitlab.com/ci/variables/)

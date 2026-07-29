@@ -6,9 +6,9 @@ aliases:
   - project files frontend
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Frontend-проект состоит не только из `src`. В корне лежат файлы, которые управляют зависимостями, сборкой, типизацией, форматированием, тестами, окружениями, Docker/CI и правилами репозитория. На собеседовании такие вопросы проверяют, понимает ли разработчик проект как систему.
+Frontend-проект состоит из application source и contracts инструментов вокруг него. Root files определяют dependency resolution, Node/package-manager version, TypeScript model, dev/build pipeline, tests, code quality, environment values, container и CI. Поэтому одинаковый `src` способен собраться и работать по-разному при разных manifests/configs.
 
 Самые важные файлы: `package.json`, lock-файл, `tsconfig.json`, `vite.config.ts` или `webpack.config.js`, `.env*`, `.gitignore`, `.npmrc`, `eslint.config.*`, `prettier.config.*`, `jest.config.*`/`vitest.config.*`, `Dockerfile`, `.gitlab-ci.yml`. Не нужно знать каждую опцию наизусть, но нужно понимать назначение файла, когда его трогают и какие ошибки он может вызвать.
 
@@ -21,7 +21,7 @@ Frontend-проект состоит не только из `src`. В корне
 | `tsconfig.json` | TypeScript compiler options, paths, strictness |
 | `vite.config.ts` | dev server, aliases, env, proxy, production build |
 | `webpack.config.js` | entry/output, loaders, plugins, optimization |
-| `.env*` | значения окружений для build/runtime |
+| `.env*` | входные значения tools; build/runtime зависит от потребителя |
 | `.gitignore` | что не попадёт в git |
 | `.npmrc` | registry, auth/config npm, strict-peer-deps, proxy |
 | `eslint.config.*` | правила статического анализа |
@@ -30,6 +30,10 @@ Frontend-проект состоит не только из `src`. В корне
 | `Dockerfile` | как собрать image |
 | `.gitlab-ci.yml` | pipeline: install, lint, test, build, deploy |
 | `README.md` | onboarding и команды проекта |
+
+#### Базовая модель
+
+Конфиги образуют связанный graph, а не независимый набор файлов. Alias должен одинаково пониматься TypeScript, bundler, tests и lint resolver; Node/package-manager version должна совпадать локально, в CI и Docker; public env должна попасть в нужный build, а secret — не попасть в client output.
 
 #### Развернутый ответ
 
@@ -48,9 +52,9 @@ ESLint ловит проблемы кода и командных правил, 
 **Env, Docker и CI связывают код с окружением.**
 `.env*` управляет значениями окружения, Dockerfile описывает сборку image, `.gitlab-ci.yml` фиксирует pipeline. Ошибки здесь дают типичные проблемы: локально работает, а в CI нет; dev API работает, а production routing сломан; env поменяли, но static bundle остался старым.
 
-#### Где применяется во frontend
+#### Диагностика по файлам
 
-| Вопрос на собесе | Что хотят проверить |
+| Симптом или вопрос | Где искать contract |
 | --- | --- |
 | Зачем нужен `package.json`? | понимаешь scripts, dependencies и manifest проекта |
 | Зачем lock-файл? | понимаешь воспроизводимость install |
@@ -63,13 +67,6 @@ ESLint ловит проблемы кода и командных правил, 
 | Почему Docker build падает на install? | lock/package manager/Node version |
 | Почему production build отличается от dev? | разные режимы сборки и env |
 
-#### Если уточнили
-
-> - **Нужно ли знать все опции конфигов?** Нет. Важно понимать роль файла, типовые настройки и где искать проблему.
-> - **Где лучше хранить aliases?** Обычно source of truth стараются держать в одном месте или синхронизировать: `tsconfig.paths`, Vite/Webpack aliases, Jest/Vitest aliases.
-> - **Чем ESLint отличается от Prettier?** ESLint анализирует код и потенциальные ошибки/правила, Prettier форматирует стиль кода.
-> - **Что должно быть в `.gitignore`?** `node_modules`, build artifacts, local env files, coverage/cache/logs. Но lock-файл обычно не игнорируют.
-
 #### Пример маршрута чтения нового проекта
 
 1. Открыть `package.json`: scripts, package manager, основные зависимости.
@@ -80,15 +77,14 @@ ESLint ловит проблемы кода и командных правил, 
 6. Проверить test/lint config: aliases, setup, environment, coverage.
 7. Посмотреть Docker/CI: install command, Node image, cache, build artifacts.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Смотреть только `src` и не понимать, как проект собирается.
-- Менять alias в Vite, но забывать `tsconfig` или test config.
-- Коммитить `.env.local`.
-- Игнорировать `.npmrc` при работе с private registry.
-- Не запускать production build после изменения config.
-- Смешивать lock-файлы разных package managers.
-- Считать ESLint и Prettier одним и тем же инструментом.
+- Роль config определяется инструментом, который его читает; `.env` сам по себе не создаёт runtime configuration.
+- Aliases, module format и browser/Node targets согласуют между compiler, bundler, tests и runtime.
+- Manifest и lock коммитят, `node_modules`/build cache восстанавливают; generated file не игнорируют автоматически только из-за размера.
+- Local env и auth config не являются местом для client secrets; утёкший tracked secret ротируют.
+- Dev server проверяет development path, production build и serving проверяются отдельно.
+- Опции не запоминают списком: сначала определяют owner contract и читают versioned docs инструмента.
 
 #### Связанные темы
 

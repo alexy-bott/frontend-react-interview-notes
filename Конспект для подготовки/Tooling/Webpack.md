@@ -6,9 +6,9 @@ aliases:
   - webpack plugins
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Webpack - это module bundler, который строит dependency graph от одного или нескольких entry points и собирает JavaScript, CSS, assets и другие модули в bundles/chunks для браузера. В отличие от Vite, Webpack чаще встречается в зрелых и legacy-проектах, где много кастомной конфигурации: loaders, plugins, devServer, aliases, source maps, optimization, Module Federation, сложная работа с CSS и assets.
+Webpack — module bundler: от entry points он строит dependency graph, применяет loaders к отдельным modules, запускает plugins над compilation и создаёт output assets/chunks. Его выбирают не только для legacy: зрелая plugin ecosystem, Module Federation и глубокий контроль compilation остаются самостоятельными причинами.
 
 Ключевые узлы настройки: `entry` задаёт начало графа; `output` определяет, куда и с какими именами класть файлы; `module.rules` через loaders трансформирует TS/JSX/CSS/SCSS/assets; `plugins` делают более широкие операции: HTML generation, env replacement, CSS extraction, analysis. `mode` включает development/production defaults. `optimization` отвечает за splitting, runtime chunk, tree shaking и minimization.
 
@@ -35,7 +35,7 @@ entry -> dependency graph -> loaders -> plugins -> optimization -> output assets
 Практическая настройка Webpack обычно включает aliases, loaders для TypeScript/React и SCSS, devServer proxy, source maps, output hashing, HTML plugin, CSS extraction, splitChunks и env constants. Для frontend-проекта dev и prod config часто различаются: в dev нужны быстрые rebuilds и удобные sourcemaps, в production - hashed filenames, minimization, extracted CSS, long-term caching и анализ bundle size.
 
 ```js
-// webpack.config.js
+// webpack.config.cjs — CommonJS config работает и при package "type": "module".
 const path = require("node:path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
@@ -126,35 +126,32 @@ Config читается по блокам:
 
 Ключевые детали: proxy нужен только локально, `contenthash` нужен для кеширования, `DefinePlugin` подставляет значения на этапе сборки и не хранит secrets.
 
-#### Развернутый ответ
+#### Базовая модель
 
 Webpack config описывает pipeline сборки. `entry` задаёт начало dependency graph, `resolve` управляет импортами, `module.rules` через loaders объясняет, как обрабатывать конкретные типы файлов, `plugins` вмешиваются в сборку целиком, `optimization` управляет разделением кода и minimization, а `output` определяет итоговые assets.
+
+Module может попасть в initial chunk, async chunk, быть external либо удалиться tree shaking-ом. Loader transformation происходит до включения output, plugin получает compiler/compilation hooks и способен создавать/изменять assets или graph-wide behavior.
+
+#### Развернутый ответ
 
 Loaders и plugins решают разные задачи. Loader отвечает на вопрос “как импортировать этот файл”: TypeScript, JSX, CSS, SCSS, SVG, images. Plugin работает шире: создаёт HTML, заменяет compile-time constants, вытаскивает CSS в отдельные файлы, анализирует bundle, управляет env и оптимизирует assets. Эта разница помогает быстро читать чужой webpack config.
 
 Dev-настройки и production-настройки разделяют по целям. В dev важны быстрые rebuilds, HMR, удобные sourcemaps, SPA fallback и proxy к backend. В production важны `contenthash`, extracted CSS, minification, splitChunks, runtimeChunk, корректный `publicPath`, приватные sourcemaps и понятное static serving.
 
+`babel-loader`/`swc-loader` может удалить TypeScript syntax, но не гарантирует typecheck. Для этого отдельно запускают `tsc --noEmit` или checker plugin. `mode: "production"` включает разумные defaults, но не исправляет `publicPath`, cache policy, source-map exposure и application-specific split strategy.
+
 Env values в Webpack попадают в клиент только через явную подстановку: `DefinePlugin`, `EnvironmentPlugin` или dotenv-подход. Всё, что оказалось в bundle, видно пользователю. Поэтому build-time constants подходят для публичных API URL, feature flags и build metadata, но не для secrets.
 
-> [!faq]+ Уточнения
-> - Loader преобразует импортируемый файл, plugin управляет сборкой в целом.
-> - `devServer.proxy` работает только локально; production proxy/rewrites настраиваются вне dev server.
-> - Webpack 5 Asset Modules заменяют многие старые случаи `file-loader`, `url-loader`, `raw-loader`.
-> - `devtool` влияет на скорость сборки, debug и риск публикации исходников.
-> - `splitChunks` помогает вынести общий код, но чрезмерное дробление создаёт сетевой overhead.
-> - Tree shaking наиболее предсказуем с ESM и пакетами без side effects.
+#### Ключевые уточнения
 
-#### Частые ошибки
-
-- Не различать loaders и plugins.
-- Настраивать proxy в Webpack и думать, что это решает production routing.
-- Класть secrets в compile-time constants.
-- Забывать `historyApiFallback` для SPA routing в dev.
-- Не использовать contenthash для долгого кеширования production assets.
-- Использовать старые `file-loader`/`url-loader` в Webpack 5 без понимания Asset Modules.
-- Делать один config на dev/prod без различий по sourcemaps, CSS и optimization.
-- Включать слишком подробные production sourcemaps публично.
-- Ломать tree shaking namespace-import-ами и CommonJS-зависимостями.
+- Loader преобразует matched module, plugin работает через hooks compilation целиком.
+- `mode` задаёт defaults, а dev/prod contracts для filenames, CSS, maps, targets и serving остаются явными.
+- `devServer.proxy`/`historyApiFallback` существуют только в dev server; production решает hosting/reverse proxy.
+- `DefinePlugin` выполняет compile-time token replacement: переданное значение должно быть сериализовано и считается публичным в client output.
+- `contenthash` поддерживает long-term cache только вместе с устойчивым chunk graph и правильной HTML/cache policy.
+- Tree shaking наиболее надёжен для statically analyzable ESM и корректного `sideEffects`; ошибочное `sideEffects: false` способно удалить нужные CSS/runtime effects.
+- Webpack transform TypeScript не является typecheck, если pipeline явно не запускает checker.
+- Source map policy определяет публикацию/upload/access; сам suffix `hidden` не делает map секретной, если файл доступен публично.
 
 #### Связанные темы
 

@@ -6,90 +6,82 @@ aliases:
   - frontend Dockerfile
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Multi-stage build позволяет разделить сборку и runtime. Для frontend это особенно полезно: в первом stage берём Node.js, устанавливаем зависимости и собираем приложение; во втором stage берём маленький runtime image, например Nginx, и копируем туда только готовые статические файлы. Так production image получается меньше, быстрее и безопаснее.
+Multi-stage Dockerfile разделяет environment сборки и environment запуска. Builder stage содержит Node.js, package manager, dependencies и source; runtime stage получает только `dist` для SPA либо минимальный server output для SSR. Build tools и исходники не попадают в финальный image.
 
-Качество Dockerfile сильно зависит от порядка слоёв. Сначала копируют lockfile и `package.json`, ставят зависимости, потом копируют исходники и запускают build. Тогда Docker может переиспользовать layer с зависимостями, если код изменился, но lockfile остался прежним. `.dockerignore` дополняет это: он не даёт лишним файлам попадать в build context.
+Для эффективного cache сначала копируют manifests и lockfile, выполняют воспроизводимую установку, затем добавляют source. Изменение source переиспользует dependency layer, а изменение lockfile корректно его инвалидирует. Build secrets передают через BuildKit secret mounts, а не `ARG`, `ENV` или `COPY`.
 
 #### Ключевая схема
 
 ```text
-builder stage
--> install dependencies
--> run tests or build
--> produce dist
-
-runtime stage
--> copy dist only
--> serve files
+deps stage: manifests + lockfile -> npm ci
+build stage: dependencies + source -> npm run build -> dist
+runtime stage: server config + dist -> container command
 ```
 
-| Инструкция | Роль |
-| --- | --- |
-| `FROM` | выбрать base image или stage |
-| `WORKDIR` | задать рабочую директорию |
-| `COPY` | скопировать файлы в image |
-| `RUN` | выполнить команду при сборке |
-| `ARG` | build-time параметр |
-| `ENV` | переменная окружения внутри image/container |
-| `EXPOSE` | документировать порт |
-| `CMD` | команда запуска container |
+| Инструкция | Фаза | Смысл |
+| --- | --- | --- |
+| `FROM ... AS` | build | создаёт именованный stage |
+| `COPY` | build | создаёт layer из context/предыдущего stage |
+| `RUN` | build | выполняет команду и сохраняет результат layer |
+| `ARG` | build | параметр сборки, не secret storage |
+| `ENV` | image/runtime | default environment container |
+| `EXPOSE` | metadata | документирует port, но не публикует его |
+| `CMD` | runtime | default command container |
+
+#### Базовая модель
+
+Каждая инструкция использует результат предыдущих layers и inputs. Cache hit возможен, когда instruction и её dependencies не изменились. Если `COPY . .` стоит до `npm ci`, изменение любого source file инвалидирует установку dependencies.
+
+`npm ci` следует `package-lock.json`, удаляет существующий `node_modules` и падает при несогласованности manifest/lockfile. Это делает dependency graph проверяемым. Для pnpm/yarn используют соответствующий frozen/immutable mode и правильный lockfile.
+
+Multi-stage `COPY --from=build` переносит только выбранные files, но секрет, записанный в build output, всё равно попадёт в runtime. Разделение stages уменьшает поверхность, а не заменяет контроль содержимого artifact.
 
 #### Развернутый ответ
 
-Multi-stage build отделяет инструменты сборки от runtime. Один stage часто оставляет в production image исходники, dev-зависимости, package manager cache и build tools. Multi-stage переносит только результат: `dist` для SPA или server output для SSR.
+**Build cache mount.** `RUN --mount=type=cache,target=/root/.npm npm ci` сохраняет скачанные package archives между builds без добавления cache directory в image layer. Build обязан давать тот же результат и при пустом cache.
 
-Порядок `COPY` влияет на Docker cache. Сначала копируют `package.json` и lockfile, выполняют `npm ci`, а исходники копируют после этого. Тогда изменение компонента не инвалидирует layer с установкой зависимостей, если lockfile не изменился.
+**Secrets.** Private registry token нужен только команде установки. `RUN --mount=type=secret,id=npmrc,target=/root/.npmrc npm ci` временно монтирует файл на время instruction. `ARG NPM_TOKEN` может появиться в history/provenance и влияет на cache; он не предназначен для credentials.
 
-В CI и Docker build используют lockfile-дисциплину. `npm ci` устанавливает зависимости строго по lockfile и падает, если `package.json` с ним не согласован. Это делает сборку воспроизводимой и помогает ловить случайные изменения зависимостей.
+**Build-time public config.** `ARG VITE_API_URL` допустим как публичный input, но значение встраивается в bundle и остаётся видимым. Изменение arg инвалидирует соответствующий build layer и создаёт другой artifact; это важно для стратегии «build once, promote».
 
-`ARG` и `ENV` живут в разных фазах. `ARG` доступен во время build. `ENV` попадает в image/container runtime. Для frontend всё, что встраивается в bundle на build-time, становится публичным JavaScript. Поэтому public API URL допустим, а secrets - нет.
+**Runtime stage.** Static image содержит Nginx/config/assets. SSR image содержит production server files и production dependencies, запускается не-root user при поддержке output и корректно обрабатывает signals. Конкретный layout зависит от framework output.
 
-Build secrets используют для приватных package registry tokens и похожих значений, которые нужны только во время build. Обычный `ARG` или копирование `.env` может оставить секрет в metadata, layer history или итоговом image.
-
-Для Next.js SSR финальный stage обычно Node-based: копируется standalone output, static assets и запускается server. Для статической SPA финальный stage может быть Nginx-only.
-
-> [!faq]+ Уточнения
-> - Multi-stage уменьшает production image и отделяет build tools от runtime.
-> - Lockfile копируют до исходников, чтобы кешировать установку зависимостей.
-> - `npm ci` подходит для CI/Docker, потому что следует lockfile.
-> - `ARG` - build-time, `ENV` - runtime container environment.
-> - Secrets передают через build secrets/CI, а не через обычный `ARG` или `.env` в image.
+**Base images.** Floating major tag упрощает обновления, но build меняется без source diff. Pin digest даёт точность, но требует регулярного automated update. Для production выбирают поддерживаемую Node/Nginx version и фиксируют policy; версии примера не являются рекомендацией навсегда.
 
 #### Пример
 
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM node:22-alpine AS deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
+
 COPY . .
 RUN npm run build
 
 FROM nginx:1.27-alpine AS runtime
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
+
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
 ```
 
-Для Next.js SSR такой финальный stage обычно будет Node-based, а не Nginx-only.
+Это SPA-вариант. В репозитории base images фиксируют по утверждённой версии/digest, а CI запускает built image и проверяет отдачу `index.html` до публикации.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Делать production image на полном Node stage без необходимости.
-- Копировать весь проект до `npm ci` и ломать кеш зависимостей.
-- Не использовать lockfile.
-- Передавать секреты через `ARG` и оставлять их в истории сборки.
-- Не фиксировать major/minor base image и неожиданно получать несовместимые обновления.
-- Забывать, что `EXPOSE` не публикует порт сам по себе.
+- Multi-stage исключает ненужные build files только тогда, когда runtime stage копирует узкий список outputs.
+- Порядок instructions определяет область invalidation cache; manifests идут до часто меняющегося source.
+- Cache mount ускоряет build, но не является dependency или частью обязательного результата.
+- `ARG` и `ENV` не подходят secrets; BuildKit secret доступен только нужной `RUN` instruction.
+- SPA runtime и SSR runtime различаются, поэтому один Nginx Dockerfile нельзя механически использовать для server-rendered приложения.
 
 #### Связанные темы
 
@@ -97,11 +89,11 @@ CMD ["nginx", "-g", "daemon off;"]
 - [[Конспект для подготовки/DevOps/Nginx и static serving]]
 - [[Конспект для подготовки/DevOps/Env variables и секреты]]
 - [[Конспект для подготовки/DevOps/Frontend pipeline]]
-- [[Конспект для подготовки/Web Basics/HTTP caching]]
+- [[Конспект для подготовки/Tooling/package.json и lock-файлы]]
 
 #### Источники
 
-- [Docker Docs: Multi-stage builds](https://docs.docker.com/build/building/multi-stage/)
-- [Docker Docs: Dockerfile reference](https://docs.docker.com/reference/dockerfile/)
-- [Docker Docs: Build cache](https://docs.docker.com/build/cache/)
-- [Docker Docs: Build secrets](https://docs.docker.com/build/building/secrets/)
+- [Docker: Multi-stage builds](https://docs.docker.com/build/building/multi-stage/)
+- [Dockerfile reference](https://docs.docker.com/reference/dockerfile/)
+- [Docker: Build cache](https://docs.docker.com/build/cache/)
+- [Docker: Build secrets](https://docs.docker.com/build/building/secrets/)

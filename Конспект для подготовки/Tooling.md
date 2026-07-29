@@ -12,15 +12,18 @@
 - [[Конспект для подготовки/Tooling/Vite]]
 - [[Конспект для подготовки/Tooling/Webpack]]
 - [[Конспект для подготовки/Tooling/Build config и production сборка]]
+
+#### Связанные разделы
+
 - [[Конспект для подготовки/Performance/Bundle size и loading strategy]]
 
 #### Маршрут
 
-1. Начать с файлов проекта: `package.json`, lock, `tsconfig`, env, configs, `.gitignore`, `.npmrc`.
-2. Разобрать зависимости: semver, package managers, lock-файлы, `npm ci`, одинаковые версии в команде.
-3. Перейти к Vite: dev server, native ESM, HMR, production build, env variables.
-4. Потом перейти к Webpack: entry/output, loaders, plugins, devServer, source maps, splitChunks.
-5. Разобрать lint/format слой: ESLint, Prettier, typecheck, CI quality gate.
-6. Разобрать bundle control: что входит в bundle, analyzer, size budgets, chunks.
-7. Разобрать практический build config: aliases, env, assets, sourcemaps, proxy, `base/publicPath`.
-8. Связать tooling с DevOps и Performance: build artifact, env, Docker, CI/CD, bundle size.
+1. Прочитать root files как связанные contracts: manifest, lock, TypeScript, build, tests, env и CI.
+2. Разделить SemVer constraints, lock resolution, package-manager layout и install result.
+3. Зафиксировать воспроизводимый toolchain: Node/manager/platform, frozen install и один release artifact.
+4. Разобрать public/build/runtime config, затем `.gitignore`, registry auth, README и quality configs.
+5. Понять Vite development graph, dependency optimization, HMR и версионную границу Vite 8/Rolldown.
+6. Понять Webpack compilation: entries, loaders, plugins, chunks, output и dev/prod contracts.
+7. Проследить состав bundle: import chain, tree shaking, dynamic splits, execution cost и size budgets.
+8. Собрать production build contract: resolution, browser target, assets URLs, maps, hosting и smoke verification.

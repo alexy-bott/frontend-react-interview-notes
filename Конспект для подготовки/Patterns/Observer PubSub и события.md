@@ -7,59 +7,65 @@ aliases:
   - события frontend
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Observer - это паттерн, где объект-источник уведомляет подписчиков об изменениях. PubSub похож, но часто добавляет посредника: publisher публикует событие в channel/topic, subscriber подписывается на этот topic, а стороны не знают друг о друге напрямую.
+Observer («Наблюдатель») связывает источник состояния с подписчиками: источник хранит подписки и уведомляет их об изменении. Publish/Subscribe (PubSub) добавляет посредника - broker, event bus или topic, через который publisher отправляет событие, не зная конкретных subscribers.
 
-Во frontend это встречается постоянно: DOM events, `addEventListener`, store subscriptions, WebSocket messages, EventSource/SSE, BroadcastChannel, custom event bus, observable streams, form watchers. Главная тема не только “как подписаться”, но и как отписаться, не создать memory leak и не потерять связь с React/Vue lifecycle.
-
-Паттерн полезен для событий и внешних источников данных, но опасен как скрытая глобальная коммуникация. Если всё приложение общается через event bus без явных связей, поток данных становится трудно отлаживать.
+Во frontend эта модель лежит в основе DOM events, подписок на store, сообщений WebSocket и SSE, `BroadcastChannel` и некоторых SDK. При использовании важны контракт события, момент и порядок доставки, отписка, частота обновлений и понятный владелец побочных эффектов. Глобальный event bus уменьшает прямые зависимости, но может сделать поток данных скрытым.
 
 #### Ключевая схема
 
-| Подход | Кто знает кого | Frontend-пример |
-| --- | --- | --- |
-| Observer | source хранит subscribers | store subscription |
-| PubSub | publisher и subscriber связаны через broker/topic | event bus, message channel |
-| DOM events | browser event target уведомляет listeners | `addEventListener` |
-| Realtime | server присылает события | WebSocket/SSE |
-
 ```text
-source/event channel
--> subscriber callback
--> update state/cache/UI
--> cleanup on unmount
+Observer:
+source -> список observers -> callbacks
+
+PubSub:
+publisher -> broker/topic -> subscribers
 ```
+
+| Критерий | Observer | PubSub |
+| --- | --- | --- |
+| Связь | подписчик регистрируется у источника | стороны знают только broker/topic |
+| Посредник | не обязателен | является частью модели |
+| Типичный пример | store subscription | event bus или message broker |
+| Основной риск | lifecycle подписки | скрытые зависимости и неявный порядок последствий |
+
+Термины в библиотеках используются не всегда строго. Важнее явно описать участников, контракт и способ доставки конкретной реализации.
+
+#### Базовая модель
+
+Подписчик передаёт callback и получает способ отписки. Когда возникает событие, источник или broker вызывает активных подписчиков и передаёт payload. Получатель преобразует событие в локальное действие: обновляет store, объявляет query cache устаревшим, показывает уведомление или отправляет аналитику.
+
+Событие должно сообщать о свершившемся факте или понятном изменении, например `order.updated`, и содержать достаточный проверяемый payload. Название `changed` без сущности и идентификатора вынуждает подписчиков догадываться, что произошло.
+
+Для локального event bus доставка часто синхронная: callbacks выполняются прямо внутри `publish`. Для DOM, WebSocket или внешнего broker момент доставки определяется соответствующим API. Сам паттерн не гарантирует асинхронность, повторную доставку, порядок или обработку ошибок - это часть конкретного контракта.
 
 #### Развернутый ответ
 
-Observer подходит, когда есть источник изменений и несколько потребителей. Например, store сообщает компонентам, что state изменился. Компонент подписывается, получает обновление и перерендеривается или обновляет локальное состояние.
+**Lifecycle.** Подписка удерживает callback и всё, что попало в его замыкание. Если владелец больше не используется, но не отписался, источник продолжит вызывать старый код и удерживать память. Поэтому API подписки удобно возвращает `unsubscribe`, а React effect возвращает эту функцию как cleanup.
 
-PubSub удобен, когда отправитель события не должен знать конкретных получателей. Например, WebSocket layer публикует `notification:new`, а разные части приложения могут реагировать: badge обновляет счётчик, toast показывает сообщение, cache invalidation обновляет запрос.
+**React и внешний store.** Для чтения изменяемого внешнего store в React 18 предназначен `useSyncExternalStore`: он связывает подписку с получением согласованного snapshot. Обычный `useEffect` подходит для реакции на внешнее событие как на побочный эффект, но самодельная подписка с `setState` может пропустить изменение между render и запуском effect или вести себя некорректно при concurrent rendering.
 
-Главный риск - скрытый поток данных. Если событие публикуется из одного места, а последствия размазаны по десятку подписчиков, становится сложно понять, почему UI изменился. Поэтому PubSub используют точечно: realtime, cross-tab communication, analytics, plugin-like extension points, интеграция с внешней системой.
+**Порядок и ошибки.** Если несколько subscribers изменяют общее состояние, результат может зависеть от порядка вызова. Если один синхронный callback выбрасывает исключение, простой event bus может не вызвать оставшихся. Контракт должен определить, изолируются ли ошибки, допускается ли повторная публикация во время обработчика и можно ли менять список подписок во время доставки.
 
-Во frontend lifecycle критичен. Подписка должна иметь cleanup: `removeEventListener`, `unsubscribe`, `socket.off`, `abort`, закрытие stream. Иначе компонент размонтировался, а callback продолжает держать ссылки на state, DOM или closures.
+**Частота.** События `scroll`, `pointermove` или поток котировок могут приходить быстрее, чем нужен новый UI. Throttle ограничивает частоту обработки, batching объединяет несколько изменений, а selector не даёт компоненту реагировать на неиспользуемую часть store. Конкретный способ выбирают по смыслу данных: не каждое промежуточное событие можно отбросить.
+
+**Граница применения.** Props, вызов функции и state manager создают более явный поток данных и обычно предпочтительны внутри связной фичи. PubSub полезен для интеграционных границ: realtime, связь вкладок, analytics или расширяемая plugin-система, где отправитель действительно не должен знать получателей.
 
 #### Где применяется во frontend
 
-| Ситуация в проекте | Что является событием | Что важно учесть |
+| Сценарий | Источник и событие | Что требуется дополнительно |
 | --- | --- | --- |
-| Компонент слушает resize/scroll | DOM event | throttling/debounce и `removeEventListener` при unmount |
-| Store сообщает об изменении state | store subscription | selector, unsubscribe, защита от лишних render |
-| WebSocket присылает новое сообщение | server event | обработать reconnect, duplicate messages, cache update |
-| Несколько вкладок должны синхронизировать logout | cross-tab event | BroadcastChannel/storage event и cleanup |
-| Analytics слушает user actions | domain event | не смешивать analytics с бизнес-логикой UI |
-| Form library отслеживает поле | form watch/subscription | отписаться и не перерендеривать всю форму без причины |
-
-> [!faq]+ Уточнения
-> - Observer обычно подразумевает прямую подписку на source, PubSub - обмен через topic/broker.
-> - В React подписки на внешние источники требуют cleanup в effect.
-> - Event bus удобен точечно, но может сделать поток данных скрытым.
-> - WebSocket/SSE события нужно связывать с cache/state policy.
-> - Частые events вроде scroll/input требуют debounce, throttle или scheduling.
+| DOM | `EventTarget` отправляет click/scroll | корректные options и `removeEventListener` |
+| Store | store сообщает об изменении snapshot | selector, unsubscribe, интеграция через API фреймворка |
+| Realtime | WebSocket/SSE доставляет server event | runtime-валидация, reconnect, id и правила кеша |
+| Несколько вкладок | `BroadcastChannel` передаёт logout | проверка payload и закрытие channel |
+| Analytics | domain event преобразуется в вызов SDK | отсутствие влияния аналитики на бизнес-результат |
+| Форма | библиотека сообщает об изменении поля | узкая подписка, чтобы не обновлять всю форму |
 
 #### Пример
+
+Минимальный синхронный event bus возвращает явный cleanup:
 
 ```ts
 type Listener<T> = (event: T) => void;
@@ -73,32 +79,23 @@ function createEventBus<T>() {
       return () => listeners.delete(listener);
     },
     publish(event: T) {
-      listeners.forEach(listener => listener(event));
+      for (const listener of [...listeners]) {
+        listener(event);
+      }
     },
   };
 }
 ```
 
-Использование в React:
+Копия списка делает текущую доставку независимой от подписки или отписки внутри callback. Пример не изолирует ошибки слушателей и вызывает их синхронно; production-реализация должна зафиксировать это как контракт либо добавить нужную политику.
 
-```tsx
-useEffect(() => {
-  const unsubscribe = notificationsBus.subscribe(notification => {
-    setNotifications(prev => [notification, ...prev]);
-  });
+#### Ключевые уточнения
 
-  return unsubscribe;
-}, []);
-```
-
-#### Частые ошибки
-
-- Подписаться в effect и забыть cleanup.
-- Использовать event bus вместо явных props/state там, где достаточно обычного data flow.
-- Публиковать слишком общие события вроде `"changed"` без payload-контракта.
-- Не типизировать payload события.
-- Не учитывать частоту событий и перегружать render.
-- Не обрабатывать reconnect/duplicates для realtime-событий.
+- Observer и PubSub описывают связи между участниками, но сами не гарантируют асинхронность, порядок и надёжность доставки.
+- Cleanup завершает владение подпиской. Его место определяется lifecycle владельца: компонента, сессии, вкладки или всего приложения.
+- Для внешнего store в React 18 используют `useSyncExternalStore` или готовую интеграцию библиотеки, а не произвольную подписку после render.
+- Event bus подходит для реального разделения отправителя и получателей; внутри обычного data flow он часто скрывает зависимости и усложняет поиск причины изменения UI.
+- Событие от сети или другой вкладки является внешними данными и требует проверки, даже если TypeScript описывает ожидаемый payload.
 
 #### Связанные темы
 
@@ -114,5 +111,5 @@ useEffect(() => {
 #### Источники
 
 - [MDN: EventTarget](https://developer.mozilla.org/en-US/docs/Web/API/EventTarget)
-- [MDN: WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
+- [React: useSyncExternalStore](https://react.dev/reference/react/useSyncExternalStore)
 - [Martin Fowler: Event Aggregator](https://martinfowler.com/eaaDev/EventAggregator.html)

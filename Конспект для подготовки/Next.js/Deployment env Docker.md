@@ -6,11 +6,11 @@ aliases:
   - Next.js self-hosting
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Next.js deployment зависит от режима приложения. Static export создаёт HTML/CSS/JS assets и может отдаваться Nginx, CDN, S3 или любым static server. Но SSR, dynamic rendering, Server Actions, Route Handlers, Middleware и runtime image optimization требуют server runtime: Node.js server, Docker container с Node process или платформу, которая поддерживает Next.js server execution.
+Deployment Next.js определяется используемыми runtime features. `output: "export"` создаёт static files для Nginx/CDN/object storage, но dynamic rendering, Server Actions, runtime Route Handlers, Middleware и built-in image optimization требуют Next.js server. Для self-hosting это обычно Node process или Docker image; Nginx может быть reverse proxy и отдавать static assets, но не заменяет Next.js runtime.
 
-Env variables делятся на server-only и public. По умолчанию env доступны только на сервере. Всё с prefix `NEXT_PUBLIC_` попадает в browser bundle и становится публичным. В Docker важно различать build-time env и runtime env: если значение нужно менять между окружениями без пересборки image, его нельзя вшивать в client bundle на этапе `next build`.
+`NEXT_PUBLIC_*` statically inlined во время `next build`, попадает в browser bundle и замораживается в image. Обычная env может оставаться server-only, но будет прочитана при runtime только кодом, который действительно выполняется при runtime: statically rendered Server Component способен вычислить значение ещё во время build. Один image для разных environments требует явного разделения build config, runtime server config и публичного runtime config.
 
 #### Ключевая схема
 
@@ -23,19 +23,25 @@ Env variables делятся на server-only и public. По умолчанию
 | Route Handlers/webhooks | server runtime |
 | Middleware | server runtime/edge-compatible runtime |
 | `NEXT_PUBLIC_*` | встраивается в client bundle |
-| private env | читается только на сервере |
+| private env | server code; время чтения зависит от rendering mode |
 
-#### Развернутый ответ
+#### Базовая модель
 
 Для SPA привычная схема проста: собрать `dist`/`build`, положить в Nginx/CDN и отдавать статику. Next.js может работать так же, если проект использует static export. В Next.js 14 команда `next export` удалена; static export включают через `output: "export"` в `next.config.js`. После `next build` получается папка `out`.
 
 SSR-приложение нельзя свести к набору статических файлов. Если route рендерится на request time, использует Server Actions, Route Handlers, Middleware, cookies/headers, dynamic rendering или runtime env, нужен server process. В self-hosting варианте это обычно `next build` + `next start` или standalone output внутри Docker image. Nginx в такой архитектуре может отдавать static assets и проксировать запросы в Node.js, но не заменяет server runtime.
 
-Env variables - частая ловушка. Server-only env можно читать в server code: Server Components, Route Handlers, Server Actions. Public env с `NEXT_PUBLIC_` встраиваются в client bundle во время build, поэтому пользователь может увидеть их в JS. Такие значения подходят для public API base URL, analytics key, feature flag без секрета, но не для токенов, private URLs и credentials.
+`output: "standalone"` использует Output File Tracing и копирует минимальный server плюс необходимые dependencies в `.next/standalone`. Папки `public` и `.next/static` автоматически туда не копируются: их либо доставляет CDN/reverse proxy, либо Dockerfile копирует рядом с generated `server.js`.
 
-Build-time и runtime env особенно важны в Docker. Один и тот же image часто продвигают из staging в production. Если значение вшито в bundle на `next build`, оно уже не изменится при `docker run -e`. Для runtime server env используют server-side чтение во время request/dynamic rendering. Для client-visible значений обычно требуется отдельная стратегия: разные builds, runtime config endpoint, server-injected config или hosting-level mechanism.
+#### Развернутый ответ
 
-Self-hosted cache тоже нужно учитывать. ISR/Data Cache по умолчанию может храниться на filesystem/in-memory конкретного контейнера. Если несколько replicas обслуживают один сайт, без общего cache handler возможна рассинхронизация. Для Kubernetes/нескольких containers нужен общий cache layer или настройка cache handler, если приложение активно использует ISR/revalidation.
+**Environment values.** Public env с `NEXT_PUBLIC_` встраиваются при build и видны пользователю. Server-only env доступны Server Components, Route Handlers и Server Actions, но момент чтения зависит от execution: static render может выполниться при build, dynamic render — при request. Если значение должно меняться после запуска image, route/service обязан читать его в runtime path. Client-visible runtime config передают отдельным public endpoint/file и не считают секретом.
+
+**Immutable release.** Если staging и production собирают отдельно с разными `NEXT_PUBLIC_*`, это два разных artifacts. Вариант допустим, но не соответствует build once/promote. Для продвижения одного image environment-specific server secrets передают при container start, а public values — через runtime config. Release ID помогает проверить, какой image и config обслуживают request.
+
+**Multiple instances.** Локальный filesystem/in-memory cache одной replica не обеспечивает согласованность ISR/Data Cache всего deployment. Нужны shared cache handler и координация tag invalidation. Server Actions между несколькими instances также требуют согласованной encryption configuration. При rolling deploy старый client и новый server могут встретиться одновременно, поэтому учитывают version skew и сохраняют совместимые assets.
+
+**Proxy/runtime.** Reverse proxy должен поддерживать streaming и не буферизовать response без необходимости. Health/readiness checks подтверждают, что Node process готов принимать traffic. Static chunks кешируют как immutable, а HTML/RSC responses — по policy Next.js и CDN, чтобы внешний cache не переиспользовал personalized output.
 
 Для Next.js 14 production также важна patch-line. После RSC security advisories affected Next.js 14.x проекты должны быть обновлены до `next@14.2.35` или актуальной patched версии своей линии. Это особенно важно для приложений с App Router, RSC, Server Actions и Route Handlers, потому что server runtime становится частью attack surface.
 
@@ -50,14 +56,6 @@ Self-hosted cache тоже нужно учитывать. ISR/Data Cache по у
 | Несколько replicas + ISR | нужен shared cache/стратегия revalidation |
 | Security patching | следить за Next/RSC patched versions |
 
-> [!faq]+ Уточнения
-> - Static export можно отдавать через Nginx/CDN, но он не поддерживает server-only features.
-> - SSR Next.js требует Node.js runtime или совместимую платформу.
-> - `NEXT_PUBLIC_*` не секрет, а публичное значение, зашитое в browser bundle.
-> - Runtime env в Docker работают для server code, но не меняют уже собранный client JS.
-> - При нескольких replicas нужно думать о shared cache для ISR/Data Cache.
-> - `NEXT_PUBLIC_*` и sourcemaps считаются публичной поверхностью; секреты держат на сервере/CI/CD secret storage.
-
 #### Пример
 
 Static export:
@@ -71,21 +69,39 @@ const nextConfig = {
 module.exports = nextConfig;
 ```
 
-Server runtime scripts:
+Standalone server output:
 
-```json
-{
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
-  }
-}
+```js
+// next.config.js
+module.exports = {
+  output: "standalone",
+};
 ```
 
-Server-only env:
+```dockerfile
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:22-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+USER node
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+Server-only runtime env внутри dynamic route:
 
 ```tsx
+export const dynamic = "force-dynamic";
+
 export default async function Page() {
   const apiToken = process.env.INTERNAL_API_TOKEN;
   const data = await getPrivateData(apiToken);
@@ -94,13 +110,17 @@ export default async function Page() {
 }
 ```
 
-#### Частые ошибки
+`force-dynamic` показан для демонстрации runtime reading, а не как универсальная рекомендация. Если route может оставаться static, конфигурацию лучше определить на build или отделить от page rendering.
 
-- Деплоить SSR Next.js как набор файлов для Nginx.
-- Класть секреты в `NEXT_PUBLIC_*`.
-- Ожидать, что `docker run -e NEXT_PUBLIC_API_URL=...` изменит уже собранный JS.
-- Не учитывать cache/ISR при нескольких replicas.
-- Использовать static export, а потом ожидать работу Server Actions или Route Handlers.
+#### Ключевые уточнения
+
+- Static rendering внутри Next.js server и static export — разные deployment models.
+- `NEXT_PUBLIC_*` является публичным build-time constant; `docker run -e` не перепишет готовый client bundle.
+- Обычная env не попадает в client bundle автоматически, но static server render может прочитать её при build.
+- Standalone output не включает `public` и `.next/static` автоматически; deployment обязан доставить их отдельно.
+- Несколько replicas требуют общей cache/invalidation strategy и согласованной Server Actions configuration.
+- Reverse proxy/CDN должен сохранять streaming и не кешировать personalized responses как shared public content.
+- Rollout проверяет health, release ID, assets и возможность rollback, а не только факт запуска container.
 
 #### Связанные темы
 

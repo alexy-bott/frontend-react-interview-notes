@@ -8,9 +8,9 @@ aliases:
   - Corepack
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Package manager устанавливает зависимости, строит `node_modules` или альтернативную модель доступа к пакетам, запускает scripts и поддерживает lock-файл. Во frontend чаще встречаются npm, Yarn и pnpm. Главное правило: в одном проекте используют один package manager и один lock-файл.
+Package manager разрешает semver constraints, создаёт/проверяет lock, материализует dependency graph, запускает lifecycle/scripts и управляет workspaces. npm, Yarn и pnpm могут получить различное layout/peer behavior из одного manifest, поэтому проект фиксирует один manager/version и один lock format.
 
 npm - стандартный package manager, который идёт вместе с Node.js. Yarn часто используют из-за развитой workspace-модели, Plug'n'Play и настроек монорепозиториев. pnpm отличается content-addressable store и строгой моделью зависимостей: пакеты физически переиспользуются через общий store, а проект получает ссылки на них.
 
@@ -23,13 +23,17 @@ npm - стандартный package manager, который идёт вмест
 | npm | `package-lock.json` | стандартный выбор, `npm ci` для CI |
 | Yarn | `yarn.lock` | workspaces, `.yarnrc.yml`, возможен Plug'n'Play |
 | pnpm | `pnpm-lock.yaml` | общий store, symlinks, строгие зависимости |
-| Corepack | нет своего lock | помогает использовать указанную версию package manager |
+| Corepack | нет своего lock | при установке/включении запускает manager из `packageManager` |
 | `packageManager` | поле в `package.json` | фиксирует ожидаемый manager и его версию |
 
-#### Развернутый ответ
+#### Базовая модель
 
 **Package manager отвечает за dependency resolution.**
 Он читает `package.json`, выбирает версии по semver-диапазонам, строит dependency tree, записывает lock-файл и создаёт окружение, из которого Node/bundler сможет импортировать пакеты.
+
+Resolution отвечает «какая version выбрана», layout — «откуда module доступен». Hoisting npm/Yarn может случайно сделать undeclared transitive dependency доступной; строгая linked layout pnpm чаще обнаруживает такой import. Код обязан объявлять прямые dependencies независимо от manager.
+
+#### Развернутый ответ
 
 **Смешивание package managers ломает воспроизводимость.**
 Если один разработчик запускает `npm install`, второй `yarn install`, а CI использует `pnpm install`, lock-файлы и дерево зависимостей могут расходиться. В результате баги становятся плавающими: локально всё работает, а pipeline падает или собирает другой bundle.
@@ -43,7 +47,9 @@ Yarn активно используется с workspaces и своими на�
 **`packageManager` делает выбор явным.**
 Поле `"packageManager": "pnpm@9.0.0"` или `"npm@10.9.8"` помогает инструментам и людям понять, чем ставить зависимости. Это особенно важно для onboarding, CI, Docker и больших команд.
 
-#### Где применяется во frontend
+Install выполняет package lifecycle scripts, то есть сторонний code может запускаться на машине/CI. `--ignore-scripts` снижает attack surface, но ломает packages, которым scripts нужны; решение принимают как supply-chain policy, а не универсальный флаг.
+
+#### Практическое применение
 
 | Ситуация | Что проверять |
 | --- | --- |
@@ -55,13 +61,6 @@ Yarn активно используется с workspaces и своими на�
 | Ошибка “module not found” | зависимость реально объявлена или случайно подтягивалась hoisting-ом |
 | Merge conflict lock-файла | не был ли lock создан другим manager |
 
-#### Если уточнили
-
-> - **Почему pnpm иногда ловит ошибки, которых не было в npm?** Из-за более строгой модели доступа к зависимостям. Если пакет импортирует зависимость, которую не объявил, pnpm чаще проявит проблему.
-> - **Что такое workspaces?** Это способ управлять несколькими пакетами внутри одного репозитория: например, `app`, `shared/ui`, `shared/config`.
-> - **Зачем Corepack?** Он помогает запускать нужный package manager/version, указанный проектом, вместо случайной глобальной версии.
-> - **Можно ли просто удалить lock и поставить другим manager?** Только как осознанная миграция. Нужно обновить docs, CI, Docker, lock-файл и проверить сборку.
-
 #### Пример команд
 
 | Задача | npm | Yarn | pnpm |
@@ -72,14 +71,15 @@ Yarn активно используется с workspaces и своими на�
 | Добавить dev dependency | `npm install -D vite` | `yarn add -D vite` | `pnpm add -D vite` |
 | Запустить script | `npm run build` | `yarn build` | `pnpm build` |
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Хранить несколько lock-файлов без явной причины.
-- Не указывать package manager в README/CI.
-- Путать глобальную версию manager и версию, ожидаемую проектом.
-- Игнорировать peer dependency warnings.
-- Мигрировать с npm на pnpm/yarn без обновления Docker и pipeline.
-- Считать, что `node_modules` у разных package managers устроен одинаково.
+- Manager выбирает graph по manifest и lock; npm/Yarn/pnpm layout и peer resolution не обязаны совпадать.
+- Workspaces связывают несколько packages, но каждый package сохраняет собственные dependency boundaries.
+- `packageManager` фиксирует intent; фактический manager обеспечивает Corepack/version manager/CI image.
+- Frozen install запрещает незаявленное изменение lock, но не обновляет dependencies и не устраняет platform differences.
+- Peer warning анализируют как compatibility problem; suppress flag может оставить runtime с двумя несовместимыми copies.
+- Смена manager является migration с новым lock, CI/Docker/cache policy и полным verification.
+- Install scripts выполняют dependency code и входят в supply-chain threat model.
 
 #### Связанные темы
 

@@ -7,7 +7,7 @@ aliases:
   - testing async forms
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
 Async UI тестируют вокруг пользовательского результата: что видно на экране во время запроса, после успеха, после ошибки, после server validation, после `401/403`, после debounce или retry. В React это обычно integration-тест: компонент рендерится через Testing Library, пользовательские действия выполняются через `userEvent`, сеть контролируется через MSW, результат ждётся через `findBy...` или `waitFor`.
 
@@ -36,9 +36,13 @@ render UI
 | debounce validation | запрос после паузы, отмена старого результата | Jest fake timers |
 | retry | число попыток, финальное состояние | fake timers + MSW |
 
-#### Развернутый ответ
+#### Базовая модель
 
 Async UI ломается не только из-за неправильного запроса. Частые причины регрессий: loader не исчез, кнопка остаётся disabled, server error потерялся, `422` не попал в поле формы, `401` ушёл в бесконечный refresh-loop, устаревший response перезаписал свежие данные, retry сработал слишком много раз, optimistic update не откатился после ошибки.
+
+Async test должен контролировать момент завершения operation. Deferred promise или MSW handler с управляемым response позволяет отдельно доказать pending state и final state; мгновенный mock способен пропустить loader до assertion и дать ложное ощущение покрытия.
+
+#### Развернутый ответ
 
 Integration-тест покрывает эту связку на уровне поведения. Он не проверяет `setState`, название hook-а или private function. Он проверяет наблюдаемый контракт: пользователь нажал кнопку, увидел pending state, получил сообщение об ошибке или успешный результат. Если компонент использует `fetch`, RTK Query, React Query или свой API-клиент, MSW перехватывает запрос на сетевой границе и возвращает контролируемый HTTP response.
 
@@ -46,15 +50,9 @@ Integration-тест покрывает эту связку на уровне п
 
 Auth flow проверяют как протокол состояния, а не как набор внутренних вызовов. При `401` приложение может один раз выполнить refresh и повторить исходный запрос. Если refresh успешен, пользователь видит исходный результат. Если refresh неуспешен, пользователь выходит из сессии или попадает на login. `403` означает, что пользователь известен, но прав не хватает; этот сценарий не должен запускать бесконечный refresh.
 
-Fake timers нужны для debounce, throttle, retry delay, delayed validation и polling. При сочетании fake timers с `userEvent` важно синхронизировать продвижение времени и возвращать real timers после теста. Иначе таймеры, pending callbacks и microtasks могут протечь в соседние проверки и создать flaky suite.
+При нескольких одновременных `401` проверяют single-flight refresh: один refresh request, очередь исходных operations и единый success/logout result. Replay допустим только для безопасно повторяемого request либо при продуманной idempotency; stream/body и mutation нельзя слепо отправлять повторно.
 
-> [!faq]+ Уточнения
-> - `findBy...` используют, когда элемент должен появиться после async-операции.
-> - `queryBy...` подходит для проверки исчезновения или отсутствия.
-> - `waitFor` нужен для условия, которое не выражается одним `findBy`.
-> - MSW handlers сбрасывают после каждого теста через `resetHandlers()`.
-> - `401` и `403` тестируют разными сценариями, потому что это разные продуктовые реакции.
-> - Для race condition проверяют, что поздний старый response не перетирает новый результат.
+Fake timers нужны для debounce, throttle, retry delay, delayed validation и polling. При сочетании fake timers с `userEvent` важно синхронизировать продвижение времени и возвращать real timers после теста. Иначе таймеры, pending callbacks и microtasks могут протечь в соседние проверки и создать flaky suite.
 
 #### Пример
 
@@ -85,16 +83,15 @@ test("shows server field error after submit", async () => {
 });
 ```
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Проверять вызов внутреннего hook-а вместо результата в UI.
-- Использовать `getBy...` для элемента, который появляется после запроса.
-- Забывать `await` перед `userEvent` и async assertions.
-- Не проверять loading, empty и error states.
-- Смешивать `401` и `403` в один сценарий.
-- Не сбрасывать MSW handlers, timers, storage и query cache между тестами.
-- Делать fake timers без возврата к real timers.
-- Проверять только happy path формы и не покрывать `422`.
+- Pending state проверяют до controlled operation resolve, затем отдельно success/error cleanup.
+- `findBy` ждёт появление, `waitForElementToBeRemoved` — исчезновение, `waitFor` — повторяемое assertion condition.
+- Race test намеренно завершает requests в обратном порядке и подтверждает, что stale response проигнорирован.
+- `401` может запускать один refresh/replay, `403` отражает недостаток permissions и не запускает refresh loop.
+- Concurrent `401` требуют single-flight coordination; replay mutation учитывает idempotency.
+- Fake timers с `userEvent` используют через `advanceTimers` и всегда восстанавливают в teardown.
+- Между tests очищают MSW overrides, query cache, storage, clock и auth singleton state.
 
 #### Связанные темы
 

@@ -6,110 +6,87 @@ aliases:
   - script setup
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Options API и Composition API - это два способа писать компоненты Vue. В Options API код группируется по опциям: `data`, `methods`, `computed`, `watch`, lifecycle hooks. Это удобно для простых компонентов и для чтения legacy-кода. В Composition API логика собирается внутри `setup()` или `<script setup>` и группируется по фичам: состояние, computed, watchers, lifecycle hooks и функции одной бизнес-задачи лежат рядом.
+Options API и Composition API - два поддерживаемых способа описывать компоненты Vue 3. Options API группирует код по типам опций: `data`, `computed`, `methods`, `watch` и lifecycle hooks. Composition API использует импортируемые функции внутри `setup()` или `<script setup>` и позволяет располагать рядом состояние, вычисления и эффекты одной feature.
 
-Главное преимущество Composition API не в производительности, а в архитектуре. Когда компонент растёт, Options API разносит одну фичу по разным секциям, а Composition API позволяет вынести её в composable вроде `useUserSearch()` с явным входом и выходом. Такой код проще масштабировать, тестировать и типизировать в TypeScript, потому что меньше магии вокруг `this`.
-
-На практике в новых Vue 3 проектах чаще выбирают Composition API с `<script setup>`. Options API не является “неправильным”: он остаётся поддерживаемым и нормален для простых или старых компонентов. Миксины в новом коде обычно заменяют composables, потому что у composable явнее зависимости, меньше конфликтов имён и понятнее контракт.
+Options API удобен предсказуемой структурой небольших компонентов и часто встречается в существующем коде. Composition API лучше масштабирует сложную связанную логику, переиспользуется через composables и естественнее типизируется TypeScript без компонентного `this`. Для новых Single-File Components официальная документация рекомендует Composition API с `<script setup>`, но Options API не объявлен устаревшим.
 
 #### Ключевая схема
 
 | Критерий | Options API | Composition API |
 | --- | --- | --- |
-| Группировка | по типам опций | по фичам |
-| Переиспользование | mixins, extends | composables |
-| TypeScript | больше ограничений из-за `this` | точнее inference |
-| Новые проекты Vue 3 | можно, но реже | чаще основной выбор |
-| Legacy-код | часто встречается | постепенно добавляется |
+| Организация | по типам опций | по связанным features |
+| Переиспользование логики | mixins и функции вне компонента | composables с явным контрактом |
+| Доступ к экземпляру | через `this` | переменные и closures внутри `setup` |
+| TypeScript inference | сложнее для `this`, mixins и inject | опирается на обычные функции и типы |
+| Основной Vue 3 SFC-стиль | поддерживается | `<script setup>` рекомендуется docs |
+
+#### Базовая модель
+
+Оба API используют одну систему компонентов и реактивности. Options API в Vue 3 реализован поверх Composition API, поэтому выбор не меняет саму модель обновления DOM. Отличаются способ объявления зависимостей, организация кода и возможности повторного использования логики.
+
+`setup()` выполняется один раз для каждого экземпляра компонента до mount. Внутри него нет компонентного `this`: props передаются аргументом, context содержит `attrs`, `slots`, `emit` и `expose`, а bindings возвращаются в template. `<script setup>` компилируется в `setup()` и автоматически делает top-level bindings доступными template.
+
+Composable - функция, которая использует Composition API для инкапсуляции stateful-логики, например `useUserSearch()`. Её входы и возвращаемые значения видны в месте вызова. Mixin объединяет options неявно и может создавать конфликты имён или скрытые зависимости от полей компонента.
 
 #### Развернутый ответ
 
-**Options API**
+**Выбор API.** Для небольшого компонента Options API может быть проще: разработчик сразу знает, где искать methods и computed. Когда одна feature размазывается между `data`, `computed`, `watch` и hooks, Composition API позволяет собрать её в одном блоке и затем вынести в composable.
+
+**`<script setup>`.** Это compile-time syntax, а не отдельный runtime API. Макросы `defineProps`, `defineEmits`, `defineExpose` и другие обрабатываются compiler и не импортируются из `vue`. Компоненты и функции, импортированные на верхнем уровне, доступны template напрямую.
+
+**TypeScript.** В Composition API значения имеют типы обычных переменных и функций. Options API тоже поддерживает TypeScript, но inference усложняется вокруг `this`, mixins и dependency injection. Это преимущество модели, а не запрет использовать Options API с TS.
+
+**Производительность.** Главная причина выбора Composition API - организация и reuse. При этом Vue docs отмечают, что `<script setup>` может создавать более эффективный и лучше минифицируемый output: template обращается к переменным напрямую, без instance proxy. Это возможное дополнительное преимущество, а не основание переписывать работающий компонент без измерения.
+
+**Смешивание.** Composition API можно вызвать через опцию `setup` внутри Options API-компонента, что полезно при постепенной миграции. Новый код не стоит без причины делить между обоими стилями: связанные данные становятся сложнее искать, а значения из Options API недоступны через `this` внутри `setup`.
+
+#### Пример
+
+Одна feature счётчика собрана рядом и может быть вынесена в composable:
 
 ```vue
-<script>
-export default {
-  data() {
-    return {
-      count: 0,
-    };
-  },
-
-  computed: {
-    doubled() {
-      return this.count * 2;
-    },
-  },
-
-  methods: {
-    inc() {
-      this.count += 1;
-    },
-  },
-};
-</script>
-```
-
-Здесь структура понятна, пока компонент небольшой. Когда фич становится много, связанный код оказывается разбросан по разным опциям.
-
-**Composition API**
-
-```vue
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from "vue";
 
-const count = ref(0);
+const props = defineProps<{
+  initialValue?: number;
+}>();
+
+const emit = defineEmits<{
+  change: [value: number];
+}>();
+
+const count = ref(props.initialValue ?? 0);
 const doubled = computed(() => count.value * 2);
 
-function inc() {
+function increment() {
   count.value += 1;
+  emit("change", count.value);
 }
 </script>
+
+<template>
+  <button type="button" @click="increment">
+    {{ count }} / {{ doubled }}
+  </button>
+</template>
 ```
 
-Логика одной фичи находится рядом и может быть вынесена в composable.
+В JavaScript-коде `ref` читается через `.value`, а в template top-level ref автоматически разворачивается. `defineProps` и `defineEmits` задают входной и выходной контракт компонента.
 
-**Composable вместо mixin**
+#### Версии и совместимость
 
-```ts
-import { computed, ref } from "vue";
+Composition API встроен в Vue 3 и Vue 2.7; для более ранних Vue 2 использовался отдельный plugin. `<script setup>` требует Single-File Component build pipeline. Конкретные возможности compiler macros зависят от minor-версии Vue, поэтому при поддержке старого проекта их сверяют с установленной версией.
 
-export function useCounter(start = 0) {
-  const count = ref(start);
-  const doubled = computed(() => count.value * 2);
+#### Ключевые уточнения
 
-  function inc() {
-    count.value += 1;
-  }
-
-  return {
-    count,
-    doubled,
-    inc,
-  };
-}
-```
-
-У composable явный API: видно, что он принимает и что возвращает. У mixin зависимости часто скрыты внутри компонента.
-
-**`<script setup>`**
-
-`<script setup>` - синтаксический сахар для Composition API в Single File Components. Top-level переменные и функции автоматически доступны в template, а код получается короче, чем ручной `setup() { return ... }`.
-
-**`this`**
-
-В Composition API внутри `setup` нет компонентного `this`. Это осознанная модель: зависимости берутся из closure, импортов и возвращаемых значений. Для TypeScript это обычно проще и предсказуемее.
-
-#### Частые ошибки
-
-- Считать, что Composition API заменяет Options API из-за скорости runtime.
-- Механически переносить Options API в `setup`, не группируя код по фичам.
-- Искать `this` внутри `setup`.
-- Возвращать из обычного `setup()` всё подряд, даже если template это не использует.
-- Делать composable со скрытыми глобальными зависимостями и неявными побочными эффектами.
-- Забывать `.value` у `ref` в JavaScript-коде.
+- Options API и Composition API являются двумя интерфейсами к одной системе Vue 3; Composition API не заменяет renderer и реактивность другой реализацией.
+- Composition API улучшает организацию только при группировке по feature. Механический перенос всех `data`, затем всех computed и methods сохраняет прежнюю проблему.
+- `setup()` и `<script setup>` не имеют компонентного `this`; зависимости должны быть явными переменными, аргументами и imports.
+- Composable полезен явным входом, выходом и lifecycle; скрытая запись в global state делает его контракт таким же неочевидным, как неудачный mixin.
+- Options API остаётся поддерживаемым и может быть разумным выбором для небольшого или существующего компонента.
 
 #### Связанные темы
 
@@ -121,4 +98,5 @@ export function useCounter(start = 0) {
 #### Источники
 
 - [Vue: Composition API FAQ](https://vuejs.org/guide/extras/composition-api-faq.html)
-- [Vue: Reactivity Fundamentals](https://vuejs.org/guide/essentials/reactivity-fundamentals.html)
+- [Vue: setup](https://vuejs.org/api/composition-api-setup.html)
+- [Vue: TypeScript with Composition API](https://vuejs.org/guide/typescript/composition-api.html)

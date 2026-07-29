@@ -45,13 +45,6 @@ Suspense шире, чем `lazy`, но не магический. Он рабо�
 
 В React 18 Suspense стал важен для streaming SSR и transitions. Сервер может отдавать готовые части HTML раньше, а transition может удерживать старый UI на экране, пока новая часть suspends. В React 19 и framework-сценариях Suspense также связан с `use`, Server Components и data fetching, но конкретное поведение зависит от фреймворка.
 
-> [!faq]+ Уточнения
-> - Static import попадает в начальный граф зависимостей, `lazy` использует dynamic import и может дать отдельный chunk.
-> - Suspense не ловит обычный `fetch` из `useEffect`.
-> - Boundary ставят там, где fallback не ломает UX и не скрывает лишний интерфейс.
-> - Chunk load error обрабатывает Error Boundary, а не Suspense.
-> - Lazy loading уменьшает initial bundle, но чрезмерное дробление создаёт waterfall и задержки переходов.
-
 #### Пример
 
 ```tsx

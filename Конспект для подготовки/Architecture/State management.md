@@ -5,70 +5,83 @@ aliases:
   - frontend state
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-State management начинается не с выбора библиотеки, а с классификации состояния. В frontend есть local state, server state, URL state, form state и global client state. Если всё складывать в один глобальный store, приложение быстро получает лишние ререндеры, сложную синхронизацию и неочевидные источники правды.
+Управление состоянием определяет владельца, источник истины, допустимые переходы и consumers каждого изменяемого значения. Сначала state классифицируют как локальное UI-состояние, URL state, form draft, server state или глобальное client state; только затем выбирают `useState`, reducer, Context, Redux Toolkit, Zustand или query library.
 
-Local state держат рядом с компонентом. Server state отдают специализированному слою вроде RTK Query, TanStack Query, SWR или loader-слою фреймворка, потому что там нужны кеш, stale data, retry, invalidation и deduplication. URL state подходит для фильтров, сортировки и пагинации, которыми можно поделиться ссылкой. Глобальный store нужен для настоящего client state, который разделяют удалённые части приложения: auth context, настройки интерфейса, feature flags, сложный wizard.
+State размещают у ближайшего владельца, которому нужно им управлять. Server data остаются в query/cache layer со свежестью и invalidation, shareable filters - в URL, ввод формы - у формы. Глобальный store нужен данным и transitions, которые действительно разделяют независимые части приложения; он не должен дублировать другие источники истины.
 
 #### Ключевая схема
 
-| Тип состояния | Примеры | Где держать |
+| Вид | Источник истины | Типичный owner |
 | --- | --- | --- |
-| Local state | открыта ли dropdown, hover, local input | `useState`, `useReducer` |
-| Server state | профиль, список заказов, права | RTK Query, TanStack Query, SWR, loaders |
-| URL state | page, sort, filters, tab | query params, route params |
-| Form state | values, touched, validation errors | form library или локально |
-| Global client state | theme, auth snapshot, wizard | Context, Redux Toolkit, Zustand |
+| Local UI | текущий component subtree | component/reducer |
+| URL | адрес текущего представления | router/search params |
+| Form draft | незавершённый ввод | form controller/library |
+| Server state | backend | query/cache layer |
+| Global client | browser-приложение | Redux/Zustand/external store |
+| Derived state | вычисляется из других данных | selector/computed value, не отдельная копия |
+
+#### Базовая модель
+
+Для каждого state задают четыре вопроса: кто его создаёт, кто меняет, сколько он живёт и должен ли переживать reload/открываться по ссылке. Эти ответы важнее количества consumers. Значение, используемое в двух соседних компонентах, можно поднять к их общему parent; для этого не нужен app-wide store.
+
+Server state отличается тем, что frontend не является его окончательным владельцем. Cache хранит snapshot, который может устареть; запросы имеют loading/error, deduplication, cancellation и refetch. Копирование ответа в client store требует вручную синхронизировать две модели.
+
+Состояние должно быть минимальным. Отфильтрованный список вычисляют из исходных items и filter, `isEmpty` - из length, а не обновляют параллельными setters. Иначе один transition может изменить source и забыть обновить копию.
 
 #### Развернутый ответ
 
-Выбор state management начинается с владельца данных. Local UI state живёт рядом с компонентом, потому что не нужен всему приложению. Server state хранится в query/cache слое, потому что он устаревает, зависит от backend, требует invalidation, deduplication, retries и background refetch. URL state хранит то, чем нужно поделиться ссылкой: filters, sort, page, tab.
+**Local state и reducer.** `useState` подходит независимому значению. Reducer полезен для нескольких связанных полей и событий, когда нужно сделать transitions явными и исключить невозможные комбинации. Он не становится global только из-за сложности.
 
-Redux Toolkit, RTK Query, Zustand и Context решают разные задачи. Redux Toolkit подходит для предсказуемого global client state, сложных событий и требований к debugging. RTK Query закрывает server-state cache внутри Redux Toolkit-экосистемы. Zustand удобен для небольшого client store без большого boilerplate: UI preferences, wizard, selected items, panels. Context подходит для редко меняющихся значений вроде theme, locale, auth snapshot или DI/config, но для частых обновлений может давать лишние renders.
+**Context.** Context передаёт значение через дерево, но не определяет модель transitions и cache. Все consumers конкретного context реагируют на изменение `value` по `Object.is`; для часто изменяемых независимых данных contexts разделяют либо используют external store с selectors.
 
-Server state вручную дублируют в global store только при явной архитектурной причине. Если список пользователей уже живёт в query cache, копия в Redux/Zustand создаёт два источника правды: один устарел, другой обновился, optimistic update прошёл в одном месте, invalidation - в другом. Такие баги сложнее, чем сама библиотека.
+**Redux Toolkit и Zustand.** Redux Toolkit полезен для событийной модели, middleware, traceability и согласованных team conventions. Zustand даёт компактный external store и selector subscriptions. Выбор зависит от transitions, debugging, ecosystem и командной поддержки, а не от размера названия библиотеки.
 
-`useState` удобен для простого состояния, `useReducer` - когда есть несколько связанных переходов и нужно явно описать события. Для формового состояния важны values, touched, dirty, errors и submit lifecycle; его часто держат в form library, а не в общем store.
+**URL state.** Search params хранят состояние представления, которое должно переживать reload, Back/Forward и copy link. Значения URL являются внешним строковым вводом: их парсят, валидируют, задают defaults и сериализуют канонически.
 
-Главное правило - один владелец данных. Например, список пользователей живёт в query cache, фильтры - в URL, состояние модального окна - локально, auth snapshot - в отдельном client store/context. Тогда изменения не требуют синхронизировать один и тот же смысл в нескольких местах.
+**Form state.** Draft, touched/dirty, client errors и submit lifecycle имеют собственную частоту updates. Перенос каждого keypress в global store обычно расширяет область подписок; shared wizard state поднимают только до владельца всего процесса и отделяют от сохранённой server entity.
 
-> [!faq]+ Уточнения
-> - State делят на local, server, URL, form и global client state.
-> - Redux/Zustand не должны автоматически становиться складом backend-ответов.
-> - Context подходит для редко меняющихся значений; частые updates требуют осторожности.
-> - URL хранит состояние страницы, которое должно переживать reload и шариться ссылкой.
-> - `useReducer` полезен, когда состояние меняется через набор событий и переходов.
+**Persistence.** `localStorage` не превращает state в надёжную database. Схема persisted data меняется между releases, данные могут устареть или содержать чувствительную информацию. Нужны version/migration, validation, expiry и безопасный fallback.
 
 #### Пример
 
 ```tsx
-const [isOpen, setIsOpen] = useState(false); // local UI state
+function UsersPage() {
+  const [params, setParams] = useSearchParams();
+  const [isHelpOpen, setHelpOpen] = useState(false);
 
-const [searchParams, setSearchParams] = useSearchParams(); // URL state
-const page = Number(searchParams.get("page") ?? 1);
+  const page = Math.max(1, Number(params.get("page")) || 1);
+  const status = parseUserStatus(params.get("status"));
 
-const usersQuery = useQuery({
-  queryKey: ["users", page],
-  queryFn: () => fetchUsers({ page }),
-});
+  const usersQuery = useUsersQuery({ page, status });
+
+  return (
+    <UsersView
+      users={usersQuery.data?.items ?? []}
+      isLoading={usersQuery.isLoading}
+      isHelpOpen={isHelpOpen}
+      onHelpOpenChange={setHelpOpen}
+      onParamsChange={setParams}
+    />
+  );
+}
 ```
 
-Здесь каждый тип состояния лежит в своём естественном месте: dropdown локально, пагинация в URL, серверные данные в query cache.
+Параметры результата принадлежат URL, server snapshot - query cache, а временное открытие help - странице. Ни один из этих owners не требует копировать все значения в общий store.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Выбирать библиотеку до понимания типа состояния.
-- Дублировать server state в глобальном store.
-- Хранить фильтры только локально, из-за чего нельзя поделиться ссылкой.
-- Делать один огромный Context для часто меняющихся данных.
-- Смешивать form draft, saved server data и optimistic update без явной модели.
+- «Один источник истины» означает одного владельца конкретного смысла, а не один store для всего приложения.
+- Context является способом передачи значения, а transitions, selectors и persistence нужно спроектировать отдельно.
+- Query cache хранит server snapshot; дублирование тех же entities в client store требует явной причины и synchronization policy.
+- Derived state вычисляют из минимальных sources, чтобы не поддерживать согласованность вручную.
+- Persistence меняет lifecycle и security state, поэтому требует validation, migration и expiry.
 
 #### Связанные темы
 
 - [[Конспект для подготовки/React/Состояние в React]]
 - [[Конспект для подготовки/React/Context]]
-- [[Конспект для подготовки/React/Redux и Flux]]
 - [[Конспект для подготовки/React/Redux Toolkit]]
 - [[Конспект для подготовки/React/RTK Query]]
 - [[Конспект для подготовки/React/Zustand]]
@@ -77,8 +90,8 @@ const usersQuery = useQuery({
 
 #### Источники
 
-- [React: Sharing State Between Components](https://react.dev/learn/sharing-state-between-components)
-- [Redux docs: Redux Essentials](https://redux.js.org/tutorials/essentials/part-1-overview-concepts)
-- [RTK Query docs: Overview](https://redux-toolkit.js.org/rtk-query/overview)
+- [React: Choosing the State Structure](https://react.dev/learn/choosing-the-state-structure)
+- [Redux: Style Guide](https://redux.js.org/style-guide/)
+- [RTK Query: Overview](https://redux-toolkit.js.org/rtk-query/overview)
 - [TanStack Query: Overview](https://tanstack.com/query/latest/docs/framework/react/overview)
-- [Zustand docs](https://zustand.docs.pmnd.rs/)
+- [Zustand: Documentation](https://zustand.docs.pmnd.rs/)

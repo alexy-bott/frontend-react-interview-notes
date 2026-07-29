@@ -1,7 +1,7 @@
 #### Темы
 
-- [[Конспект для подготовки/CSS/Специфичность селекторов]]
 - [[Конспект для подготовки/CSS/Каскад и наследование]]
+- [[Конспект для подготовки/CSS/Специфичность селекторов]]
 - [[Конспект для подготовки/CSS/Псевдоклассы и псевдоэлементы]]
 - [[Конспект для подготовки/CSS/Box Model]]
 - [[Конспект для подготовки/CSS/display и formatting contexts]]
@@ -23,9 +23,11 @@
 
 #### Маршрут
 
-1. Каскад, наследование, специфичность, псевдоклассы.
-2. Box Model, display, formatting contexts, единицы измерения.
-3. Flexbox, Grid, responsive design, media queries и container queries.
-4. SCSS: modules, tokens, mixins/functions, архитектура и вложенность.
-5. Layout: центрирование, позиционирование, stacking context.
-6. Производительность: transform, repaint, reflow.
+1. Проследить выбор одного значения: каскад, наследование, специфичность и условные selectors.
+2. Понять создание и размеры CSS boxes: Box Model, `display`, formatting contexts и единицы.
+3. Разобрать распределение пространства во Flexbox и Grid, включая intrinsic min-size и overflow.
+4. Построить адаптивность от гибкой базы к media queries и локальным container queries.
+5. Разделить normal flow, позиционирование, containing block, clipping и stacking context.
+6. Зафиксировать проектную основу через reset/normalize и доступные base styles.
+7. Понять build-time границу SCSS: modules, variables, mixins/functions и архитектура output CSS.
+8. Связать CSS-изменения со стадиями layout, paint и composite и проверить стоимость анимаций.

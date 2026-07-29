@@ -5,11 +5,11 @@ aliases:
   - Next.js version 14
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Next.js 14 - версия фреймворка поверх React 18, где основной современный подход строится вокруг App Router, React Server Components, Server Actions, streaming, cache/revalidation и гибридного rendering. В этой версии Server Actions стали стабильными, Turbopack получил заметные улучшения в dev, а Partial Prerendering существовал как preview/experimental-фича.
+Next.js 14 — full-stack React framework на базе React 18. Он добавляет file-system routing, server и client rendering, data fetching, cache/revalidation, server endpoints и production build. Основная модель App Router строится вокруг React Server Components: серверная часть UI является default, а интерактивные участки явно образуют client boundaries.
 
-Важно не смешивать Next.js 14 с более новыми версиями. В официальной документации на 16 июля 2026 актуальная ветка Next.js показывает latest `16.2.10`, а стек в этом конспекте привязан к Next.js 14. Для ответа по Next.js 14 корректно говорить про React 18, App Router, Server Components, Server Actions, `fetch` cache/revalidate-модель версии 14, static/dynamic rendering и SSR/ISR/streaming. React Compiler, современные Cache Components и директива `use cache` относятся к более новым объяснениям экосистемы и не должны звучать как базовая фича Next.js 14.
+В Next.js 14 Server Actions стали стабильными, server `fetch` по умолчанию получил cache semantics этой версии, а static/dynamic rendering, ISR и streaming управляются на уровне route и данных. Partial Prerendering оставался experimental/preview. React Compiler, Cache Components и директива `use cache` не относятся к базовой модели Next.js 14 и не должны переноситься из документации новых версий без явной оговорки.
 
 #### Ключевая схема
 
@@ -21,51 +21,47 @@ Next.js 14 - версия фреймворка поверх React 18, где о�
 | Client UI | через `"use client"` boundary |
 | Mutations | Server Actions стабильны |
 | Rendering | static, dynamic, streaming, ISR |
-| Cache | Data Cache, Full Route Cache, `revalidate`, `revalidatePath`, `revalidateTag` |
+| Cache | Request Memoization, Data Cache, Full Route Cache и client Router Cache |
 | PPR | preview/experimental, не базовая production-опора |
 | Node.js | минимум `18.17` |
 | Static export | `output: "export"`, команда `next export` удалена |
 | Security patch line | для Next 14 после RSC advisories ориентир - `14.2.35` |
 
+#### Базовая модель
+
+Next.js — не bundler и не замена React, а framework-level слой вокруг него: routing, rendering, data fetching, cache, image/font optimization, server endpoints и production conventions. В Next.js 14 главная архитектурная линия — App Router. Внутри `app` route строится файловой структурой: `page.tsx` делает сегмент публичным, `layout.tsx` задаёт общую оболочку, `loading.tsx` и Suspense помогают streaming, `error.tsx` локализует ошибки.
+
+App Router опирается на React Server Components. Компоненты в `app` по умолчанию серверные: они могут читать данные рядом с server-side источником и не добавляют свой component code в client JavaScript bundle. Интерактивность выносится в Client Components через директиву `"use client"`. Client Component при первоначальной загрузке всё ещё может участвовать в server prerender, но для интерактивности его code загружается в browser и проходит hydration.
+
 #### Развернутый ответ
 
-Next.js - это не просто bundler для React, а framework-level слой: routing, rendering, data fetching, cache, image/font optimization, API layer, server-side execution и production conventions. В Next.js 14 главная архитектурная линия - App Router. Внутри `app` route строится файловой структурой: `page.tsx` делает сегмент публичным, `layout.tsx` задаёт общую оболочку, `loading.tsx` и Suspense помогают streaming, `error.tsx` локализует ошибки.
+Rendering в Next.js 14 гибридный. Route без request-time dependencies может быть static и храниться в Full Route Cache. Dynamic functions (`cookies()`, `headers()`), `searchParams`, uncached data или route config могут перевести его в request-time rendering. При этом dynamic route всё ещё способен использовать отдельно кешируемые данные: отказ от Full Route Cache не всегда означает отказ от Data Cache. ISR обновляет static output по времени или событию, а streaming отправляет готовые chunks раньше медленной части.
 
-App Router опирается на React Server Components. Компоненты в `app` по умолчанию серверные: они могут читать данные на сервере, обращаться к секретам, не попадать в клиентский JavaScript bundle и отдавать результат в RSC Payload/HTML. Интерактивность выносится в Client Components через директиву `"use client"`. Такая граница важна для размера bundle: если большой layout пометить как client, в клиент уедет больше кода.
-
-Rendering в Next.js 14 гибридный. Если route не использует request-time данные и все данные кешируемы, он может быть static. Если используются `cookies()`, `headers()`, `searchParams`, `cache: "no-store"` или dynamic config, route становится dynamic и рендерится на запросе. ISR позволяет оставить страницу статической, но обновлять её по времени или событию. Streaming через Suspense даёт возможность отправлять готовые части UI раньше, чем завершится медленная часть.
-
-Data fetching в версии 14 часто объясняется через расширенный server-side `fetch`. По умолчанию `fetch` в Server Components может кешироваться в Data Cache, а поведение меняется через `cache: "no-store"`, `next: { revalidate }`, tags и route segment config. Мутации и invalidation связываются с Server Actions или Route Handlers через `revalidatePath` и `revalidateTag`.
+Data fetching в версии 14 часто объясняется через расширенный server-side `fetch`. До dynamic context default соответствует `force-cache`: response может храниться в persistent Data Cache. `cache: "no-store"`, `next: { revalidate }`, tags и route segment config задают freshness. Request Memoization отдельно устраняет повторные одинаковые GET `fetch` внутри одного React render; это не persistent cache. Мутации инвалидируют нужные entries через `revalidatePath` или `revalidateTag`.
 
 Production-вопросы в Next.js отличаются от SPA. Static export можно отдать через Nginx/CDN как статические файлы, но SSR, Server Actions, Middleware, Route Handlers и runtime image optimization требуют server runtime. В Docker для SSR обычно нужен Node process или standalone output; Nginx может быть reverse proxy, но не заменяет Node runtime.
 
 Для production на Next.js 14 важно учитывать RSC security advisories. Официальная React-инструкция для affected Next.js 14.x указывает обновление до `next@14.2.35`. Это не добавляет новую фичу, но важно для проектов с App Router/RSC/Server Actions, потому что часть уязвимостей находилась в серверной RSC-инфраструктуре.
 
-#### Где применяется во frontend
+#### Практическое значение
 
 | Ситуация | Что говорить про Next.js 14 |
 | --- | --- |
-| Собес спрашивает “что нового в Next 14” | App Router, Server Actions stable, cache/revalidation, streaming |
+| Нужно назвать особенности Next 14 | App Router, Server Actions stable, cache/revalidation, streaming |
 | Просят сравнить с SPA | Next добавляет server runtime, routing, rendering и cache model |
 | Проект на Next 14, docs показывают Next 16 | проверять версию docs и не переносить новые API назад |
 | Production/self-hosting | SSR/Actions/Route Handlers требуют Node/server runtime |
 | Security review | держать `next@14.2.35` для 14.x после RSC advisories |
 
-> [!faq]+ Уточнения
-> - Next.js 14 работает с React 18; React 19 не является базой этой версии.
-> - Server Actions в Next.js 14 стабильны, но всё равно требуют server-side validation и authorization.
-> - Partial Prerendering в Next.js 14 - preview/experimental, поэтому его нельзя описывать как обязательную production-модель.
-> - `next export` удалён; для static export используют `output: "export"`.
-> - Актуальная документация Next.js уже ушла дальше версии 14, поэтому формулировки про cache/React Compiler нужно проверять по версии проекта.
-> - Для Next.js 14.x после RSC security advisories важно обновиться до patched line, указанной официальными React/Next инструкциями.
+#### Ключевые уточнения
 
-#### Частые ошибки
-
-- Смешивать App Router и Pages Router в одном объяснении без указания контекста.
-- Называть любой server render “SSR”, хотя route может быть static, dynamic, ISR или streamed.
-- Считать `"use client"` локальной пометкой только одного компонента, забывая про client module graph.
-- Относить React Compiler к Next.js 14.
-- Деплоить SSR-приложение как обычную SPA без Node runtime.
+- Next.js 14 основан на React 18; возможности React 19 и новых Next.js versions не входят в baseline карточки.
+- App Router и Pages Router могут существовать в проектах одновременно, но их data/rendering APIs нельзя смешивать в одном объяснении.
+- Server rendering включает разные режимы: static output, dynamic request render, ISR и streaming; не каждый из них является SSR «на каждый запрос».
+- `"use client"` создаёт module boundary, а не выключает initial server prerender Client Component.
+- Server Actions стабильны как framework feature, но остаются server endpoints и требуют authentication, authorization и runtime validation.
+- Static export использует `output: "export"`; server-only features требуют Node или совместимый runtime.
+- Для линии Next.js 14 после RSC advisories официально исправленной версией указана `14.2.35`; security patching проверяют отдельно от feature baseline.
 
 #### Связанные темы
 

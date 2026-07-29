@@ -7,7 +7,7 @@ aliases:
   - project service files
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
 Служебные файлы проекта задают правила работы команды и инструментов. `.gitignore` говорит Git, какие неотслеживаемые файлы игнорировать: `node_modules`, `dist`, `.env.local`, coverage, cache, logs. `.npmrc` настраивает npm: registry, scope registry, auth token через env, strict-peer-deps, proxy и другие параметры. `README.md` описывает, как проект запускать, тестировать, собирать и какие env нужны.
 
@@ -26,6 +26,10 @@ aliases:
 | `.dockerignore` | исключить лишнее из Docker build context |
 | `.gitattributes` | line endings, linguist, merge strategies |
 
+#### Базовая модель
+
+Служебный файл является tooling contract. `.gitignore` влияет только на tracking untracked paths, `.npmrc` — на package-manager network/install behavior, `.dockerignore` — на build context, README — на человеческий workflow. Похожие paths не означают одинаковую область действия.
+
 #### Развернутый ответ
 
 **`.gitignore` работает только для untracked files.**
@@ -43,7 +47,9 @@ aliases:
 **`.dockerignore` похож на `.gitignore`, но решает другую задачу.**
 Он не влияет на git. Он уменьшает Docker build context и защищает от случайного попадания `node_modules`, `.git`, локальных env, coverage и кэшей в image layers.
 
-#### Где применяется во frontend
+`.env.example` документирует keys и безопасные placeholders, но не содержит production values. `.gitattributes` фиксирует line endings и отдельные merge/diff policies; `.editorconfig` задаёт базовые editor rules, не заменяя formatter.
+
+#### Практическое применение
 
 | Ситуация | Какой файл смотреть |
 | --- | --- |
@@ -53,13 +59,6 @@ aliases:
 | Docker build медленный | `.dockerignore`, порядок `COPY`, lock-файл |
 | Разные line endings | `.editorconfig`, `.gitattributes` |
 | Node version отличается | `.nvmrc`, `.node-version`, `engines` |
-
-#### Если уточнили
-
-> - **Почему `.gitignore` не сработал на уже закоммиченный файл?** Git ignore применяется к untracked files. Уже tracked файл нужно отдельно убрать из index.
-> - **Можно ли хранить npm token в `.npmrc`?** Не реальным значением. Безопаснее использовать `${NPM_TOKEN}` и передавать token через env/CI variables.
-> - **Что обязательно написать в README frontend-проекта?** Node/package manager, install, env, dev, build, test, lint, deploy notes и troubleshooting.
-> - **Чем `.dockerignore` отличается от `.gitignore`?** `.dockerignore` влияет только на Docker build context, `.gitignore` - на Git.
 
 #### Пример
 
@@ -83,14 +82,15 @@ strict-peer-deps=true
 
 Первый пример не даёт коммитить generated/local файлы. Второй показывает идею private registry без хардкода реального токена.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Коммитить `.env.local` или реальные tokens в `.npmrc`.
-- Думать, что `.gitignore` удаляет уже tracked files.
-- Игнорировать lock-файл вместе с generated files.
-- Не документировать package manager и Node version в README.
-- Путать `.dockerignore` и `.gitignore`.
-- Хранить личные editor-файлы в проектном `.gitignore`.
+- `.gitignore` не прекращает tracking и не очищает history; exposed credential отзывают независимо от удаления файла.
+- Project `.npmrc` может ссылаться на `${NPM_TOKEN}`, но secret не передают через Docker `ARG`/layer и не печатают в CI logs.
+- Registry auth ограничивают нужным host/scope, чтобы credential не отправлялся постороннему registry.
+- Lock-файл и intentional generated contracts не игнорируют вместе с disposable caches.
+- `.dockerignore` защищает context/image path, `.gitignore` — repository path; нужны оба независимых списка.
+- README фиксирует supported happy path и links на подробные runbooks, а не копирует быстро устаревающую документацию целиком.
+- Личные editor/OS patterns лучше хранить в global ignore, если они не являются общим project output.
 
 #### Связанные темы
 

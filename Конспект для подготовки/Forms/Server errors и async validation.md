@@ -6,7 +6,7 @@ aliases:
   - 422 forms
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
 Server errors и async validation закрывают правила, которые нельзя надёжно проверить только на клиенте: уникальность email, права доступа, конфликт версии, промокод, лимиты, бизнес-ограничения, состояние ресурса на backend. Client validation даёт быстрый UX, но backend остаётся источником истины.
 
@@ -35,9 +35,13 @@ client validation
 | Превышен лимит | API layer -> root error/retry hint |
 | Невалидный backend response | runtime validation на API boundary |
 
-#### Развернутый ответ
+#### Базовая модель
 
 Ошибки формы делятся на field-level и form-level. Field-level ошибка относится к конкретному control: email уже занят, password слишком короткий, дата вне диапазона. Form-level ошибка относится ко всему действию: нет доступа, конфликт версии, сервер временно недоступен, неверная комбинация email/password, операция больше невозможна.
+
+Server response сначала проходит через API error adapter. UI получает стабильный discriminated contract, а не анализирует status/message в каждом form component.
+
+#### Развернутый ответ
 
 Для API удобно возвращать структурированные ошибки. Например, `422 Unprocessable Content` с массивом field errors: `field`, `code`, `message`. `field` нужен для привязки к input, `code` - для стабильной логики/локализации, `message` - для отображения или fallback. Если backend возвращает только строку, frontend не может надёжно понять, куда её показать.
 
@@ -45,14 +49,9 @@ client validation
 
 Async validation нужно проектировать как сетевой сценарий. Проверка username/email на каждый `onChange` без debounce создаёт лишнюю нагрузку и гонки. Для устойчивого UX используют debounce, `AbortController`, request id, cache результата или проверку на blur/submit. Если значение изменилось после старта запроса, ответ старого запроса игнорируют.
 
-Conflict errors отличаются от validation errors. `422` говорит, что значения формы семантически невалидны. `409` или `412` часто означают конфликт состояния: данные редактировали параллельно, версия устарела, ресурс уже изменился. UI должен показать сценарий обновления данных, повторной загрузки или ручного выбора, а не просто подсветить одно поле.
+Положительный async-result является подсказкой, а не гарантией: между проверкой доступности username и submit другой пользователь может занять его. Backend атомарно повторяет invariant при mutation, а frontend умеет показать новый field error.
 
-> [!faq]+ Уточнения
-> - Client validation ускоряет обратную связь, backend validation остаётся обязательной.
-> - `422` обычно мапится в field errors, `409/412` - в conflict сценарий.
-> - Для общей ошибки используют `root`/error summary, а не случайное поле.
-> - Async validation требует debounce/abort/race protection.
-> - `message` показывают пользователю, `code` используют для стабильной логики.
+Conflict errors отличаются от validation errors. `422` говорит, что значения формы семантически невалидны. `409` или `412` часто означают конфликт состояния: данные редактировали параллельно, версия устарела, ресурс уже изменился. UI должен показать сценарий обновления данных, повторной загрузки или ручного выбора, а не просто подсветить одно поле.
 
 #### Пример
 
@@ -108,15 +107,14 @@ const onSubmit = async (values: ProfileValues) => {
 };
 ```
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Парсить human-readable `message` как машинный код.
-- Показывать все backend errors одним toast-ом без связи с полями.
-- Запускать async validation на каждый символ без debounce и отмены.
-- Не защищаться от race condition: старый ответ перетирает новый state.
-- Считать `422`, `409` и `500` одинаковой ошибкой формы.
-- Терять server errors после `reset` или смены default values без понятного UX.
-- Не фокусировать поле/summary после submit с ошибками.
+- Machine-readable `code` управляет logic/localization, пользовательский `message` не парсят как identifier.
+- Backend field name маппят только на известное frontend field; неизвестная ошибка становится form-level error.
+- `422`, `409/412`, `401/403` и `5xx` требуют разных recovery scenarios.
+- Debounce уменьшает requests, `AbortController`/request ID защищает UI от stale response.
+- Проверка уникальности до submit не резервирует значение; mutation повторно проверяет invariant атомарно.
+- После failure сохраняют введённые values и переводят focus на field/error summary, если это помогает исправлению.
 
 #### Связанные темы
 
@@ -124,6 +122,7 @@ const onSubmit = async (values: ProfileValues) => {
 - [[Конспект для подготовки/Forms/React Hook Form]]
 - [[Конспект для подготовки/Forms/Form state и submit lifecycle]]
 - [[Конспект для подготовки/Forms/Forms architecture]]
+- [[Конспект для подготовки/Frontend System Design/Форма с async validation и server errors]]
 - [[Конспект для подготовки/Web Basics/HTTP status codes и ошибки API]]
 - [[Конспект для подготовки/Architecture/API слой и контракты]]
 - [[Конспект для подготовки/JavaScript/Fetch и работа с API]]

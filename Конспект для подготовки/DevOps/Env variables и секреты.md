@@ -7,46 +7,42 @@ aliases:
   - runtime config
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Env variables во frontend нужно делить на build-time и runtime. В обычной SPA переменные вроде `VITE_API_URL` или `REACT_APP_API_URL` часто встраиваются в bundle во время сборки. После этого они становятся частью публичного JavaScript, поэтому туда нельзя класть секреты. Секреты должны жить на backend, в CI/CD variables, secret manager или runtime окружении сервера, но не в клиентском bundle.
+Конфигурацию frontend-приложения нужно разделять по двум независимым признакам: **когда значение доступно** — во время build или runtime — и **можно ли его раскрывать пользователю**. Всё, что попало в HTML, JavaScript bundle, browser storage или network response, является публичным независимо от названия переменной.
 
-В Docker есть `ARG` для build-time и `ENV` для image/container runtime. В GitLab CI/CD есть variables, masked/protected settings и external secrets. Важное правило: frontend может знать публичную конфигурацию, например URL API или Sentry DSN с публичным client key, но не приватные tokens, passwords, registry credentials, private API keys и signing secrets.
+Статическая SPA обычно получает публичную конфигурацию во время build. Если URL API или feature flags нужно менять без пересборки, приложение загружает публичный runtime config из отдельного файла или endpoint. Настоящие секреты — signing keys, passwords, private tokens — остаются на server side или используются внутри доверенного CI job и никогда не передаются браузеру.
 
 #### Ключевая схема
 
-| Вид значения | Где живёт | Видно пользователю |
+| | Build-time | Runtime |
 | --- | --- | --- |
-| Public API URL | frontend bundle или runtime config | да |
-| Feature flag public snapshot | frontend config | да |
-| Sentry public DSN | frontend bundle/config | обычно да |
-| Backend DB password | backend env/secret manager | нет |
-| NPM private token | CI secret/build secret | нет |
-| Docker registry password | CI variable | нет |
-| JWT signing secret | backend secret | нет |
+| Публичное значение | `VITE_API_URL` в bundle | `/config.json`, `env.js` |
+| Секрет | BuildKit secret внутри одного build step | server env или secret manager |
+
+Это не четыре равноправных способа хранить одно и то же. Клиенту допустима только публичная конфигурация. Секрет во время build нужен инструменту сборки, например для чтения private registry, но не должен попадать в конечный image или bundle.
+
+#### Базовая модель
+
+Vite статически заменяет обращения к `import.meta.env.VITE_*` при build. После сборки это уже часть клиентского кода: префикс `VITE_` означает «разрешено открыть клиенту», а не «защищено». Аналогично работают public prefixes других frameworks.
+
+Статическая SPA после запуска Nginx не начинает читать `ENV` контейнера. Её JavaScript уже собран. Изменить конфигурацию без нового build можно только через дополнительный runtime-механизм: публичный JSON/JS-файл, server-side substitution при старте или config endpoint.
+
+SSR server может прочитать env во время request и не раскрывать значение клиенту. Граница нарушается, если секрет попал в HTML, props, client component, response или client bundle. Поэтому «переменная доступна только на server» должно подтверждаться направлением data flow, а не только её названием.
 
 #### Развернутый ответ
 
-Build-time env используется во время `npm run build`. Если значение попало в JS bundle, его можно увидеть в DevTools или скачанном файле. Префиксы вроде `VITE_` и `REACT_APP_` не делают значение секретным; они только разрешают сборщику вставить его в клиентский код.
+**Public config.** URL API, release ID и часть feature flags не являются секретами. Их всё равно валидируют при старте: отсутствующий URL лучше обнаружить сразу, чем получить цепочку сетевых ошибок. Публичный API защищают authentication, authorization, rate limiting и server-side validation, а не сокрытием адреса.
 
-Статическая SPA после сборки не читает env variables контейнера автоматически. Если конфиг нужно менять без пересборки, используют `env.js`, JSON config endpoint, server-side template substitution или config, который отдаёт backend. Такой config всё равно считается публичным, если попадает в браузер.
+**CI/CD secrets.** Masked variable уменьшает риск случайного появления значения в log, protected variable ограничивает доступ protected branches/tags, environment scope — конкретным окружением. Эти настройки не защищают от доверенного job, который прочитал секрет и записал его в artifact или отправил по сети. Поэтому изменения CI-конфигурации требуют review, а особо чувствительные значения лучше выдавать кратковременно из external secret manager.
 
-SSR-приложение с Node.js может читать env variables во время обработки запроса. Но значение становится публичным, если его передали в client component, serialized props, HTML или JS bundle. Поэтому в Next.js/SSR важно разделять server-only config и public runtime config.
+**Docker build.** `ARG` и `ENV` не подходят для передачи build secrets: значения могут сохраниться в metadata, history или layer. BuildKit secret mount предоставляет значение только конкретному `RUN` и не копирует его в image, если сама команда не записала секрет в filesystem.
 
-GitLab masked variables скрываются в logs, protected variables доступны только protected branches/tags, environment-scoped variables ограничивают окружение. Это снижает риск утечки, но не отменяет дисциплину: секреты не печатают, не кладут в artifacts и не встраивают в frontend bundle.
-
-Docker build secrets используют для приватных package registry tokens и похожих значений во время build. Обычные `ARG` могут остаться в metadata/history или попасть в layer через команды, поэтому для секретов они не подходят.
-
-> [!faq]+ Уточнения
-> - Всё, что попало в frontend bundle, публично.
-> - `VITE_*` и `REACT_APP_*` означают public build-time config, а не secret.
-> - Static SPA требует отдельный runtime config mechanism, если config меняется без rebuild.
-> - SSR может читать server env, но нельзя случайно сериализовать secret в client.
-> - Masked/protected variables снижают риск, но не защищают от записи секрета в artifact/image.
+**Ротация.** Секрет должен иметь владельца, минимальные права, ограниченный срок жизни и процедуру отзыва. После утечки недостаточно удалить строку из repository: значение отзывают, заменяют и проверяют history, logs, artifacts, images и внешние системы.
 
 #### Пример
 
-Публичный runtime config для SPA:
+Статическая SPA загружает только публичную конфигурацию:
 
 ```html
 <script src="/env.js"></script>
@@ -54,40 +50,40 @@ Docker build secrets используют для приватных package regi
 ```
 
 ```js
-// env.js, генерируется при запуске container или deploy
+// Файл создаётся при deploy и доступен любому пользователю приложения.
 window.__APP_CONFIG__ = {
   apiUrl: "https://api.example.com",
-  release: "2026.07.15",
+  release: "2026.07.29",
 };
 ```
 
-Использование в приложении:
-
 ```ts
-const apiUrl = window.__APP_CONFIG__.apiUrl;
+const config = window.__APP_CONFIG__;
+
+if (!config?.apiUrl) {
+  throw new Error("Public runtime config: apiUrl is missing");
+}
 ```
 
-GitLab variables в pipeline:
+GitLab job может передать публичный build-time параметр:
 
 ```yaml
 build:
-  stage: build
   script:
     - npm ci
     - VITE_API_URL="$PUBLIC_API_URL" npm run build
 ```
 
-`PUBLIC_API_URL` должен быть публичной конфигурацией, а не секретом.
+После этой команды значение `PUBLIC_API_URL` нужно считать частью `dist`. Private token в такую переменную подставлять нельзя.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Считать `VITE_` или `REACT_APP_` переменную секретной.
-- Класть private token в frontend `.env`.
-- Передавать секрет через Docker `ARG`.
-- Печатать env variables в CI logs.
-- Сохранять `.env` или generated config с секретами в artifacts.
-- Ожидать, что static SPA сама прочитает env container после build.
-- Путать public config и secret config.
+- Public/secret отвечает на вопрос «кто может увидеть значение», а build-time/runtime — «когда оно доступно».
+- Любое значение, доставленное браузеру, публично; `.env` и нестандартное имя переменной этого не меняют.
+- `ENV` контейнера не меняет уже собранную static SPA без отдельного runtime config.
+- Server-only значение остаётся секретом только пока оно не сериализовано в client-facing output.
+- Masking защищает log от случайного вывода, но не делает недоверенный CI job безопасным.
+- Удалённый из Git secret всё равно нужно отозвать и проверить во всех производных artifacts.
 
 #### Связанные темы
 
@@ -102,7 +98,8 @@ build:
 
 #### Источники
 
+- [Vite: Env Variables and Modes](https://vite.dev/guide/env-and-mode)
 - [Docker Docs: Build variables](https://docs.docker.com/build/building/variables/)
 - [Docker Docs: Build secrets](https://docs.docker.com/build/building/secrets/)
 - [GitLab Docs: CI/CD variables](https://docs.gitlab.com/ci/variables/)
-- [GitLab Docs: Use external secrets in CI/CD](https://docs.gitlab.com/ci/secrets/)
+- [GitLab Docs: External secrets](https://docs.gitlab.com/ci/secrets/)

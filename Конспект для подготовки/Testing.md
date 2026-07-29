@@ -11,11 +11,11 @@
 
 #### Маршрут
 
-1. Общая карта: unit, integration, E2E.
-2. Стратегия: что и на каком уровне тестировать.
-3. Jest: runner, assertions, mocks, fake timers, setup/teardown.
-4. React Testing Library: поведение, queries, async UI.
-5. Network boundary: MSW и моки API.
-6. Async UI: формы, server errors, auth refresh, debounce, retry.
-7. E2E: Playwright/Cypress, критичные пользовательские flows.
-8. Стабильность: flaky tests, данные, ожидания, CI.
+1. Разделить unit, integration и E2E по реальным boundaries, затем сформулировать observable test oracle.
+2. Построить risk-based strategy: критичные contracts, минимально достаточный уровень и regression policy.
+3. Настроить Jest: environment, transforms, isolation, matchers, test doubles и fake-timer lifecycle.
+4. Проверять UI через RTL: semantic queries, `userEvent`, async appearance/disappearance и test harness.
+5. Понять MSW boundary: настоящий frontend HTTP-flow, controlled response и граница уверенности mock API.
+6. Закрыть async scenarios: pending, `422`, race, retry, single-flight auth refresh и cleanup.
+7. Проверить критичные flows в Playwright: browser/backend isolation, web-first assertions и diagnostics.
+8. Устранить flaky: deterministic data/clock/state, root-cause triage, retries и временная quarantine policy.

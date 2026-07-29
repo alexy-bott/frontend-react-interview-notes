@@ -1,66 +1,82 @@
-﻿---
+---
 aliases:
   - Vue Proxy
   - Proxy
   - Vue 3 Proxy
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-В Vue 3 реактивность построена вокруг JavaScript `Proxy`. Proxy оборачивает объект и перехватывает операции чтения и записи через traps вроде `get` и `set`. Когда компонент читает реактивное свойство, Vue запоминает зависимость. Когда свойство изменяется, Vue уведомляет связанные эффекты и планирует обновление компонента.
+Vue 3 использует JavaScript `Proxy` для реактивных объектов. `reactive(rawObject)` возвращает обёртку, которая перехватывает чтение, запись, удаление, проверку ключа и перебор свойств. Во время чтения Vue связывает текущий effect со свойством, а во время изменения уведомляет только зависимости, которых касается операция.
 
-В Vue 2 реактивность строилась через `Object.defineProperty`, из-за чего были ограничения с добавлением новых свойств и массивами. Proxy в Vue 3 позволяет отслеживать больше операций естественнее: добавление, удаление, проверку наличия ключей, работу с коллекциями. При этом Proxy не равен исходному объекту по ссылке, поэтому важно не смешивать raw object и reactive proxy без необходимости.
+Proxy решает ограничения Vue 2 вокруг добавления свойств, массивов и коллекций, но не делает реактивной любую переменную. Он наблюдает операции, проходящие через Proxy: деструктурированное примитивное значение и мутация исходного raw object обходят traps. Кроме того, Proxy и raw object имеют разные ссылки, что важно для сравнений и ключей Map/Set.
 
 #### Ключевая схема
 
-| Операция | Что делает Vue |
+```text
+raw object
+-> reactive(raw)
+-> Proxy
+   get/has/ownKeys -> track
+   set/delete       -> trigger
+-> scheduler reactive effects
+```
+
+| Операция JavaScript | Что может отслеживать Vue |
 | --- | --- |
-| `get` | отслеживает зависимость |
-| `set` | триггерит обновления |
-| `deleteProperty` | реагирует на удаление |
-| `has` / `ownKeys` | отслеживает `in`, keys, iteration |
-| `reactive()` | создает proxy-объект |
-| `ref()` | контейнер с `.value` |
+| `proxy.key` | чтение конкретного property |
+| `proxy.key = value` | добавление или изменение property |
+| `delete proxy.key` | удаление property |
+| `key in proxy` | проверку наличия |
+| `Object.keys(proxy)` / iteration | изменение набора keys |
+| `map.get()` / `set.add()` | операции поддерживаемых коллекций через instrumentation |
+
+#### Базовая модель
+
+Proxy - отдельный объект-посредник с traps. Vue хранит структуру зависимостей примерно как «target -> key -> effects». Если effect прочитал `state.count`, изменение `state.name` само по себе не требует запускать именно эту зависимость; изменение `count` выполняет trigger для подписанных effects.
+
+Nested object становится reactive при доступе через глубокий reactive Proxy. Vue возвращает для него собственный Proxy и кеширует соответствие, поэтому повторный `reactive(raw)` обычно возвращает тот же Proxy, а вызов `reactive(proxy)` возвращает сам Proxy.
+
+`ref` использует getter/setter свойства `.value`, а не JavaScript Proxy для самого контейнера. Благодаря контейнеру Vue может отслеживать замену примитива или целого объекта, чего нельзя сделать с простой локальной переменной.
 
 #### Развернутый ответ
 
-**Чем Proxy отличается от `Object.defineProperty`?**
+**Identity.** `reactive(raw) !== raw`, хотя оба представляют одни данные. Если raw object помещён в `Set`, поиск по Proxy не совпадёт. Для сущностей приложения надёжнее использовать `id`; смешивание raw/proxy identity оставляют только для осознанной интеграции.
 
-Proxy может перехватывать больше операций на объекте целиком, включая добавление и удаление свойств. `Object.defineProperty` работает на уровне уже известных свойств и требует более сложных обходных решений.
+**Raw mutation.** После `const state = reactive(raw)` запись `raw.count++` не проходит через Proxy и не запускает effects. Данные при следующем чтении через Proxy могут уже иметь новое значение, но автоматического update в момент raw mutation не было.
 
-**Почему `reactive(obj) !== obj`?**
+**Деструктурирование.** `const { count } = state` вызывает `get` один раз и кладёт число в локальную переменную. Дальнейшее чтение `count` не проходит через Proxy. `toRef(state, "count")` сохраняет связь через `.value`.
 
-`reactive` возвращает proxy-обертку, а не мутирует исходный объект в тот же самый reference. Поэтому сравнение по ссылке с raw object может дать неожиданный результат.
+**Коллекции.** `Map`, `Set`, `WeakMap` и `WeakSet` требуют не только обычных property traps, поэтому Vue применяет специальные instrumentations к их методам. Реактивность коллекций не означает, что каждое произвольное внутреннее состояние экземпляра стороннего класса безопасно proxy-фицировать.
 
-**Чем `reactive` отличается от `ref`?**
-
-`reactive` обычно используют для объектов. `ref` используют для примитивов и случаев, когда нужна реактивная ссылка на значение. В JavaScript коде значение `ref` читается через `.value`, а в шаблоне Vue автоматически разворачивает ref.
+**Выход из глубокой реактивности.** `shallowReactive`, `shallowRef` и `markRaw` применяют для интеграции с внешним state, тяжёлыми immutable structures или class instances. Они создают смешанное дерево с другими правилами вложенности, поэтому относятся к точечным advanced-инструментам, а не к общей оптимизации.
 
 #### Пример
 
 ```js
-import { reactive, effect } from "vue";
+import { reactive, toRef, watchEffect } from "vue";
 
-const state = reactive({
-  count: 0,
+const raw = { count: 0 };
+const state = reactive(raw);
+const count = toRef(state, "count");
+
+watchEffect(() => {
+  console.log("count:", count.value);
 });
 
-effect(() => {
-  console.log(state.count);
-});
-
-state.count += 1;
+state.count += 1; // проходит через Proxy и повторяет effect
+raw.count += 1;   // обходит Proxy и само по себе effect не запускает
 ```
 
-При чтении `state.count` Vue запоминает зависимость, а при записи запускает связанный effect.
+Пример использует публичный `watchEffect`, а не внутренний низкоуровневый effect. После raw mutation следует снова читать данные через `state`; постоянное хранение и изменение обеих ссылок делает поведение неочевидным.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Сравнивать proxy и исходный объект по ссылке.
-- Деструктурировать reactive object и терять реактивность без `toRefs`.
-- Забывать `.value` у `ref` в JavaScript-коде.
-- Считать, что Proxy делает глубокую магию без ограничений.
-- Мутировать raw object вместо reactive proxy.
+- Proxy отслеживает операции только тогда, когда они проходят через reactive-обёртку.
+- `reactive` не изменяет identity исходного объекта: raw и Proxy нельзя бездумно смешивать в reference comparisons.
+- Глубокая реактивность создаёт вложенные proxies по мере доступа, но не делает реактивным извлечённый примитив.
+- `ref` и `reactive` используют разные interception-механизмы и дополняют друг друга.
+- `toRaw`, `markRaw` и shallow APIs нужны интеграционным границам; длительная работа одновременно с raw и Proxy повышает риск identity bugs.
 
 #### Связанные темы
 
@@ -71,6 +87,7 @@ state.count += 1;
 
 #### Источники
 
-- [Vue Docs: Reactivity in Depth](https://vuejs.org/guide/extras/reactivity-in-depth.html)
-- [Vue Docs: Reactivity API Core](https://vuejs.org/api/reactivity-core.html)
+- [Vue: Reactivity in Depth](https://vuejs.org/guide/extras/reactivity-in-depth.html)
+- [Vue: Reactivity API - Core](https://vuejs.org/api/reactivity-core.html)
+- [Vue: Reactivity API - Advanced](https://vuejs.org/api/reactivity-advanced.html)
 - [MDN: Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy)

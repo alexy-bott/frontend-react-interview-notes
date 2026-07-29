@@ -5,72 +5,92 @@ aliases:
   - фича-флаги
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Feature flags позволяют отделить deploy от release. Код может быть уже в production, но новая возможность включается только для части пользователей, окружения, команды или эксперимента. Это помогает делать постепенный rollout, A/B tests, canary-релизы, kill switch и безопасно отключать проблемную функциональность без нового деплоя.
+Feature flag отделяет deployment кода от release поведения: один artifact содержит новую ветку, но flag service включает её для выбранного environment, сегмента или процента пользователей. Это позволяет постепенно проверить feature, быстро остановить проблемный путь и проводить controlled experiment без нового build.
 
-Но feature flags - это не бесплатная магия. Каждый флаг добавляет ветвление, комбинации состояний и риск забытых путей. Поэтому у флага должен быть владелец, понятный default, стратегия fallback, аналитика и срок удаления. Для критичных флагов важно, где принимается решение: на сервере, на клиенте или в edge/config-сервисе.
+Flag добавляет временную runtime-конфигурацию и две ветки поведения. Для него определяют owner, цель, evaluation boundary, безопасный default, метрики, test matrix и дату удаления. Клиентский flag управляет UI, но не даёт permission и не защищает API; backend независимо проверяет authorization.
 
 #### Ключевая схема
 
-| Вид флага | Для чего |
-| --- | --- |
-| Release flag | постепенно включить новую фичу |
-| Experiment flag | A/B или multivariate test |
-| Permission flag | доступ по роли или тарифу |
-| Ops flag | быстро отключить проблемный сценарий |
-| Config flag | менять параметры без деплоя |
+```text
+flag definition + targeting rules
+-> evaluation for context
+-> stable variant
+-> code path
+-> exposure + product/technical metrics
+-> full rollout or rollback
+-> remove flag and dead branch
+```
+
+| Тип | Назначение | Обычный срок жизни |
+| --- | --- | --- |
+| Release flag | постепенный выпуск новой реализации | короткий |
+| Experiment flag | сравнение вариантов с устойчивым распределением | до завершения анализа |
+| Operational flag | kill switch дорогой/рискованной функции | может быть долгим |
+| Configuration | параметр поведения без build | долгий, но с typed contract |
+| Entitlement | вариант продукта по тарифу/аккаунту | долгий; не заменяет server permission |
+
+#### Базовая модель
+
+Evaluation принимает flag key и context: environment, account, user, app version и другие разрешённые attributes. Результат должен оставаться стабильным для одного участника эксперимента, иначе пользователь переключается между вариантами и данные теряют смысл.
+
+Server evaluation скрывает rules и позволяет до render выбрать HTML/API behavior. Client evaluation быстрее меняет интерактивный UI, но rules/value доступны browser и приходят не мгновенно. Часто server формирует initial snapshot, а frontend использует его как согласованную конфигурацию сессии.
+
+Недоступность flag service является отдельным failure mode. Для checkout kill switch default может отключать рискованную интеграцию; для базовой навигации fail-closed способен сделать приложение недоступным. Default выбирают по impact конкретного флага, а не один раз для всей системы.
 
 #### Развернутый ответ
 
-Feature flag управляет включением возможности или варианта поведения, а permission отвечает за право выполнить действие. UI может скрыть кнопку по permission, но backend всё равно обязан проверять доступ. Клиентский feature flag не является security boundary: пользователь может увидеть bundle, изменить окружение или вызвать API напрямую.
+**Rollout.** Процент включения увеличивают по этапам и сравнивают error rate, latency, conversion и support signals между variants. Rollback flag возвращает старую ветку, только если она всё ещё совместима с текущими data/API migrations.
 
-Место принятия решения зависит от риска. Серверные flags используют для security-sensitive логики, стабильной сегментации и SSR. Клиентские flags удобны для UI-вариантов, экспериментов и постепенного включения уже загруженного интерфейса. Часто frontend получает готовый snapshot flags после auth/init.
+**Experiment.** Событие exposure отправляют в момент, когда пользователь действительно получил вариант, а не при каждом чтении flag. Assignment и analysis используют один stable identifier и исключают пересечение несовместимых experiments.
 
-Kill switch - флаг для быстрого отключения рискованной фичи или интеграции без нового deploy. Он полезен для платежей, внешних сервисов, дорогих запросов, новых алгоритмов и нестабильного rollout. Для такого флага нужен безопасный default, понятное поведение при недоступном config и monitoring, показывающий включённый вариант.
+**SSR/hydration.** Server и первый client render используют один snapshot. Повторная evaluation с другим context создаёт hydration mismatch или flicker. Обновление flags после hydration имеет явную policy: применить сразу, со следующей navigation или с новой session.
 
-Flags увеличивают тестовую матрицу. Минимум проверяют включенный и выключенный путь. Для опасных комбинаций добавляют integration/E2E. После завершения rollout старые флаги удаляют вместе с мёртвой веткой кода, иначе приложение начинает постоянно поддерживать старый и новый сценарии.
+**Security.** Bundle может содержать выключенную client feature, а значение flag можно подменить в DevTools. Sensitive data и операции защищаются backend authorization. Даже server-side entitlement не заменяет permission check конкретного request.
 
-На SSR/hydration нужно следить за одинаковым значением flags на сервере и клиенте. Иначе сервер отдаст один HTML, клиент включит другой вариант, и появится mismatch или мерцание UI.
+**Bundle.** Условный JSX со статическим import обычно оставляет обе реализации в bundle. Если новая тяжёлая feature должна загружаться только после включения, используют dynamic import и проектируют loading/error path.
 
-> [!faq]+ Уточнения
-> - Feature flag включает поведение, permission проверяет право пользователя.
-> - Клиентский flag не защищает доступ к данным или API.
-> - Kill switch отключает рискованный сценарий без нового deploy.
-> - У флага должны быть owner, default, fallback, analytics и срок удаления.
-> - SSR требует согласованного snapshot flags между сервером и клиентом.
+**Flag debt.** После полного rollout удаляют definition, старую ветку, tests и telemetry. Забытый flag увеличивает число combinations и не позволяет понять, какой код реально достижим. Owner и expiry автоматизируют через dashboard/CI reminders, но удаление требует ручной проверки dependencies.
 
 #### Пример
 
 ```tsx
-if (flags.newCheckout) {
-  return <NewCheckout />;
-}
+function CheckoutRoute() {
+  const variant = useFeatureFlag("checkout-redesign");
 
-return <LegacyCheckout />;
+  if (variant.status === "loading") {
+    return <CheckoutSkeleton />;
+  }
+
+  if (variant.value === "new") {
+    return <NewCheckout />;
+  }
+
+  return <LegacyCheckout />;
+}
 ```
 
-Такой код приемлем временно. После полного rollout старую ветку и сам флаг нужно удалить, иначе приложение будет тащить два сценария бесконечно.
+Для SSR `variant` гидратируется из server snapshot. После завершения rollout `LegacyCheckout`, условие и flag удаляются одной задачей; наличие fallback не является постоянным архитектурным требованием.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Использовать клиентский флаг как security boundary.
-- Не задавать безопасный default, если config не загрузился.
-- Держать флаг годами после завершения rollout.
-- Не логировать, в каком варианте пользователь увидел ошибку.
-- Не учитывать SSR/hydration mismatch при разных значениях flags.
-- Создавать слишком много зависимых флагов без карты комбинаций.
+- Deploy доставляет artifact, release включает поведение; feature flag связывает эти события, но не заменяет deployment rollback.
+- Flag и permission отвечают на разные вопросы: «какой вариант показать?» и «разрешено ли действие?».
+- Safe default зависит от impact и доступности fallback; универсального `false` для всех flags нет.
+- Stable assignment и exposure event обязательны для корректного experiment, но лишни простому operational switch.
+- Полный rollout не завершён, пока flag и мёртвая ветка не удалены.
 
 #### Связанные темы
 
 - [[Конспект для подготовки/Architecture/Frontend architecture]]
 - [[Конспект для подготовки/Architecture/Error handling и observability]]
+- [[Конспект для подготовки/Performance/Bundle size и loading strategy]]
 - [[Конспект для подготовки/Testing/Стратегия тестирования frontend]]
 - [[Конспект для подготовки/React/Hydration]]
-- [[Конспект для подготовки/Web Basics/Cookies и авторизация]]
 
 #### Источники
 
 - [Martin Fowler: Feature Toggles](https://martinfowler.com/articles/feature-toggles.html)
-- [LaunchDarkly Docs: Feature flags](https://docs.launchdarkly.com/home/flags)
-- [web.dev: A/B testing on the web](https://web.dev/articles/ab-testing)
+- [OpenFeature: Concepts](https://openfeature.dev/docs/reference/concepts/)
+- [LaunchDarkly: Feature flags](https://docs.launchdarkly.com/home/flags)

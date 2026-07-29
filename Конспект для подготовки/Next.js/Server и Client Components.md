@@ -6,36 +6,42 @@ aliases:
   - RSC в Next.js
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-В App Router компоненты по умолчанию являются Server Components. Они выполняются на сервере, могут читать данные рядом с источником, обращаться к секретам, не добавлять свой код в клиентский bundle и отдавать результат как часть HTML/RSC Payload. Client Components нужны для интерактивности: state, effects, event handlers, browser APIs, кастомные hooks, работа с `window`, `localStorage`, DOM-событиями.
+В App Router компоненты по умолчанию являются Server Components. Они рендерятся на server во время build или request, могут читать server-side данные и не добавляют свой component code в client bundle. Client Components нужны для state, effects, event handlers и browser APIs. При первой загрузке Next.js может предварительно отрендерить их HTML на server, а затем browser загружает их JavaScript и выполняет hydration.
 
-Граница задаётся директивой `"use client"` в начале файла. Эта директива создаёт client boundary: сам файл, его imports и компоненты, которые он напрямую рендерит, попадают в client module graph. Поэтому `"use client"` ставят как можно ближе к интерактивному UI, а не на весь layout. Props из Server Component в Client Component должны быть serializable.
+Директива `"use client"` создаёт entry point client module graph: сам модуль и всё, что он импортирует, должно быть пригодно для browser. Граница распространяется по imports, но Server Component можно передать в Client Component как заранее вычисленный `children`/slot. Данные через server-to-client boundary должны поддерживаться React serialization protocol.
 
 #### Ключевая схема
 
 | Вопрос | Server Component | Client Component |
 | --- | --- | --- |
-| Где выполняется | сервер | браузер после hydration |
+| Где участвует в render | server | initial prerender на server, затем browser |
 | `useState` / events | нет | да |
 | `useEffect` | нет | да |
 | Browser APIs | нет | да |
-| DB/API secrets | да | нет |
+| Server-only credentials | может использовать, но не передавать в output | нет |
 | Client bundle | не добавляет свой JS | добавляет JS |
-| Props | может передать serializable данные | получает serializable props |
+| Boundary data | создаёт server result/RSC payload | получает React-serializable props |
 | Основная роль | данные, shell, HTML, меньше JS | интерактивность |
 
-#### Развернутый ответ
+#### Базовая модель
 
 Server Components решают две задачи: переносят часть работы на сервер и уменьшают клиентский JavaScript. Компонент может быть `async`, получить данные из API/DB/CMS, собрать UI и отправить результат без отправки собственного component code в браузер. Это снижает bundle size и защищает server-only логику: токены, private env, прямые запросы к базе, filesystem.
 
 Client Components нужны там, где UI должен реагировать в браузере: клик, ввод, состояние, эффекты, drag and drop, media query, `localStorage`, focus management, Radix UI components, React Hook Form. Они всё равно могут быть предварительно отрендерены в HTML на сервере для initial preview, но их JavaScript должен загрузиться и пройти hydration, чтобы UI стал интерактивным.
 
+#### Развернутый ответ
+
 `"use client"` не означает “этот компонент никогда не рендерится на сервере”. Она означает “это entrypoint в client module graph”. Next.js может использовать Client Component для prerendered HTML, но весь код этого client graph должен быть безопасен для браузера и попадёт в bundle. Поэтому случайный import server-only модуля в client graph создаёт ошибку или утечку.
 
-Server Component может рендерить Client Component и передать ему props. Но эти props должны быть serializable: строки, числа, boolean, arrays, objects без функций, class instances и нестандартных runtime-сущностей. Если клиенту нужен callback на сервер, используют Server Action, а не передачу функции как обычного prop.
+Server Component может рендерить Client Component и передать ему props. Граница использует React Flight serialization, а не обычный `JSON.stringify`: протокол поддерживает, например, `Date`, `Map` и `Set`. При этом произвольные callback-функции, class instances, DOM nodes, database connections и другие process-specific objects передавать нельзя. Server Action является специальной server reference, а не обычной функцией-prop.
 
-Composition часто выглядит так: server page получает данные и рисует статическую часть, а внутрь вставляет маленький client island для интерактивности. Providers обычно являются Client Components, но их размещают как можно ниже, чтобы не превращать весь application shell в client subtree.
+Composition часто выглядит так: server page получает данные и рисует статическую часть, а внутрь вставляет небольшой client island для интерактивности. Client Component не может импортировать Server Component, но может принять уже сформированный server element через `children` или другой slot. Так интерактивная оболочка, например modal, не переносит server content в client module graph.
+
+Providers обычно являются Client Components, потому что context читается hooks. Их размещают как можно ниже, оборачивая только нужный subtree. Это не превращает переданные server children в client code, но JavaScript самого provider и его client imports всё равно попадает в bundle.
+
+На первой загрузке server создаёт RSC Payload и использует его вместе с Client Component instructions для HTML preview. Browser показывает HTML, затем RSC Payload согласует component trees, а JavaScript Client Components гидратирует interactive boundaries. При последующей navigation Next.js может передать новый RSC Payload без полной перезагрузки документа.
 
 #### Где применяется во frontend
 
@@ -47,13 +53,6 @@ Composition часто выглядит так: server page получает д�
 | Layout с server data и статичным shell | Server Component |
 | Theme/Auth provider с hooks | Client Component, размещённый как можно ниже |
 | Передача server data в UI island | Server -> Client через serializable props |
-
-> [!faq]+ Уточнения
-> - Server Component не может использовать `useState`, `useEffect`, event handlers и browser APIs.
-> - Client Component не должен получать секреты и server-only объекты.
-> - `"use client"` распространяется на module graph файла, поэтому влияет на размер bundle.
-> - Props из server в client должны быть serializable.
-> - Server Components и SSR не одно и то же: RSC описывает component model, SSR - генерацию HTML.
 
 #### Пример
 
@@ -84,23 +83,27 @@ export default async function ProductsPage() {
 import { useState } from "react";
 
 export default function AddToCartButton({ productId }: { productId: string }) {
-  const [pending, setPending] = useState(false);
+  const [added, setAdded] = useState(false);
 
   return (
-    <button disabled={pending} onClick={() => setPending(true)}>
-      Add to cart
+    <button onClick={() => setAdded(true)} data-product-id={productId}>
+      {added ? "Added" : "Add to cart"}
     </button>
   );
 }
 ```
 
-#### Частые ошибки
+В примере page получает данные и формирует список на server. В browser уезжает code только интерактивной кнопки и её props. Состояние `added` локально и не записывает корзину на backend; реальная мутация потребовала бы Server Action или HTTP API.
 
-- Ставить `"use client"` на `app/layout.tsx` из-за одного dropdown.
-- Импортировать server-only код в Client Component.
-- Передавать функции, class instances, `Date`, `Map` или неserializable объекты в props без явного преобразования.
-- Думать, что Server Component автоматически делает страницу статической.
-- Использовать Client Component для data fetching, который можно выполнить на сервере.
+#### Ключевые уточнения
+
+- Server Component не использует state/effects/event handlers и не обращается к browser APIs.
+- Client Component может иметь initial HTML с server, но интерактивность появляется только после загрузки JavaScript и hydration.
+- `"use client"` распространяется по imports, а не по визуальному DOM subtree: server content можно передать client wrapper как slot.
+- React serialization шире JSON, но произвольный runtime object через boundary не переносится.
+- Server-only secret разрешено использовать при server вычислении, но нельзя включать в props, HTML, RSC payload или response.
+- Server Components описывают component/data protocol, SSR — создание HTML; это связанные, но разные механизмы.
+- Server Component не делает route автоматически static: rendering mode зависит от request-time APIs, cache policy и route config.
 
 #### Связанные темы
 

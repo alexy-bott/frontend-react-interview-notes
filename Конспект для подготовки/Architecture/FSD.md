@@ -7,13 +7,11 @@ aliases:
   - slices segments public api
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-FSD, или Feature-Sliced Design, - это методология организации frontend-приложения вокруг бизнес-смысла и правил зависимостей. Она помогает не просто разложить файлы по папкам, а удерживать границы: где app setup, где страницы, где крупные виджеты, где пользовательские фичи, где доменные entities, где shared-инфраструктура.
+Feature-Sliced Design (FSD) - методология организации frontend-кода по бизнес-смыслу и направлению зависимостей. Она задаёт три уровня структуры: layers определяют масштаб ответственности, slices разделяют слой по domain/feature, segments группируют код slice по назначению.
 
-Основные понятия FSD - layers, slices и segments. Layers задают уровень ответственности: `app`, `pages`, `widgets`, `features`, `entities`, `shared`; `processes` в актуальной версии считается deprecated. Slices делят слой по бизнес-доменам, например `user`, `article`, `cart`. Segments делят slice по назначению кода: `ui`, `model`, `api`, `lib`, `config`.
-
-Главное правило зависимостей: модуль может импортировать только слои ниже себя. `features` может использовать `entities` и `shared`, но не другую `feature` напрямую и не `pages`. Это снижает циклы, скрытую связность и хаос при росте продукта. Для доступа наружу slice обычно открывает public API через `index.ts`, а внутренности slice не импортируются напрямую.
+Стандартный import rule разрешает module импортировать slices только из строго нижних layers. Например, `features/add-to-cart` использует `entities/product` и `shared/api`, но не внутренности другой feature или page. Slice открывает узкий public API, поэтому consumers не зависят от его файловой реализации.
 
 #### Ключевая схема
 
@@ -26,45 +24,34 @@ entities
 shared
 ```
 
-| Уровень | Что хранит | Пример |
-| --- | --- | --- |
-| `app` | providers, router, global styles, app init | `app/providers`, `app/router` |
-| `pages` | route-level screens | `pages/profile` |
-| `widgets` | крупные самостоятельные блоки страницы | `widgets/header`, `widgets/profile-card` |
-| `features` | пользовательские действия с бизнес-ценностью | `features/update-profile`, `features/add-to-cart` |
-| `entities` | доменные сущности | `entities/user`, `entities/product` |
-| `shared` | инфраструктура без знания бизнеса | `shared/ui`, `shared/api`, `shared/lib` |
+Зависимости направлены сверху вниз. Не каждый проект и не каждая feature обязаны использовать все промежуточные layers.
 
-```text
-slice/
-  ui/
-  model/
-  api/
-  lib/
-  index.ts
-```
+| Структура | Отвечает на вопрос | Пример |
+| --- | --- | --- |
+| Layer | какой масштаб ответственности? | `features` |
+| Slice | к какой бизнес-области относится? | `add-to-cart` |
+| Segment | какую роль играет код внутри slice? | `ui`, `model`, `api` |
+| Public API | что разрешено использовать снаружи? | `features/add-to-cart/index.ts` |
+
+#### Базовая модель
+
+`app` содержит bootstrap, providers, routing и global configuration. `pages` собирает route-level screens. `widgets` представляет крупные самостоятельные UI-блоки. `features` реализует значимое действие пользователя. `entities` описывает business entities и связанное с ними представление/данные. `shared` хранит инфраструктуру и UI, не знающие конкретного бизнеса.
+
+В `pages`, `widgets`, `features` и `entities` обычно находятся slices по business domain. `app` и `shared` не делятся на business slices: у `shared/ui`, `shared/api` и `app/providers` сразу технические segments. Это исключение следует из назначения крайних layers.
+
+Segments не являются жёстко закрытым списком, но называются по назначению: `ui`, `model`, `api`, `lib`, `config`. Корзины `components`, `hooks`, `types` сообщают формат файла хуже, чем роль кода, и часто размазывают одну feature.
 
 #### Развернутый ответ
 
-FSD решает проблему роста связности. В маленьком проекте технические папки `components`, `hooks`, `api`, `utils` могут работать нормально. В большом продукте они часто размазывают одну фичу по всему `src`: UI лежит в одном месте, запросы в другом, state в третьем, типы в четвёртом. Изменение сценария становится поиском по проекту. FSD собирает логически связанные части ближе друг к другу и ограничивает направление зависимостей.
+**Import rule.** Slice может зависеть от lower layers и собственного внутреннего кода. Горизонтальный import между slices одного layer запрещён, потому что скрывает composition и создаёт cycles. Две features обычно связываются в widget/page; общий domain contract опускается в entity/shared, если он действительно общий.
 
-Layers отвечают на вопрос “какой уровень ответственности у этого кода?”. `shared` не знает бизнес-сценариев. `entities` описывает доменные модели и базовые операции с ними. `features` реализует действия пользователя. `widgets` собирает несколько фич/entities в крупный блок. `pages` композиционно собирает экран маршрута. `app` соединяет роутинг, провайдеры и глобальную инициализацию.
+**Public API.** Внешний код импортирует только экспортируемый контракт slice, например `@/features/update-profile`. Deep import `@/features/update-profile/model/internal-store` привязывает consumer к внутренностям. Не следует создавать один barrel на весь layer: он увеличивает риск cycles и скрывает реальные dependencies.
 
-Slices отвечают на вопрос “к какой бизнес-области относится код?”. Например, `entities/user` содержит код вокруг пользователя, а `features/update-profile` - конкретное действие обновления профиля. Slices одного слоя не должны импортировать друг друга напрямую, потому что это создаёт горизонтальную связность. Если двум slices нужен общий код, его поднимают ниже по слоям или выделяют отдельный контракт.
+**Cross-import entities.** Для неизбежной связи двух entities FSD описывает специальный `@x` public API, который явно делает cross-reference видимым. Это controlled exception, а не способ свободно импортировать любые same-layer slices.
 
-Segments отвечают на вопрос “какая техническая роль у файла внутри slice?”. `ui` хранит отображение, `model` - состояние и бизнес-правила, `api` - запросы и DTO, `lib` - локальные helpers, `config` - настройки. Названия segments должны помогать искать назначение кода. Поэтому `components`, `hooks`, `types` как универсальные корзины часто дают меньше пользы, чем `ui`, `model`, `api`.
+**Granularity.** Feature формулируется как пользовательское действие с business value: `add-to-cart`, `change-password`. Entity - существительное предметной области: `product`, `user`. Не каждую кнопку выделяют в feature, а большой end-to-end flow не помещают целиком в одну entity.
 
-Public API защищает slice от импорта внутренних файлов. Внешний код импортирует из `features/update-profile`, а не из `features/update-profile/model/internalStore`. Это позволяет менять внутреннюю структуру slice без массового рефакторинга потребителей. Public API должен быть узким: наружу выводят только то, что действительно является контрактом slice.
-
-FSD не требует использовать все слои в каждом проекте. Для небольшого приложения может хватить `app`, `pages`, `features` и `shared`, а `widgets` или `entities` появятся позже. Методология полезна, когда проект растёт, фич много, команда меняется, а границы между модулями начинают расплываться.
-
-> [!faq]+ Уточнения
-> - FSD - это архитектурная методология, а не библиотека и не state manager.
-> - Слои стандартизированы; новые слои добавляют редко, потому что ломается общий смысл и import rule.
-> - `processes` в FSD v2.1 считается deprecated.
-> - `shared` и `app` не делятся на slices, они делятся сразу на segments.
-> - Public API slice обычно делают через `index.ts`.
-> - FSD можно внедрять постепенно: сначала `app/shared`, затем pages/widgets, потом features/entities и исправление import violations.
+**Внедрение.** Legacy-проект мигрируют постепенно: фиксируют aliases и import boundaries, выделяют `app/shared`, затем route pages и наиболее изменяемые business modules. Массовое перемещение файлов без ограничения новых imports создаёт новый каталог с прежней связностью.
 
 #### Пример
 
@@ -73,79 +60,56 @@ src/
   app/
     providers/
     router/
-    styles/
-
   pages/
-    profile/
+    product/
       ui/
       index.ts
-
   widgets/
-    profile-card/
+    product-details/
       ui/
-      model/
       index.ts
-
   features/
-    update-profile/
+    add-to-cart/
       ui/
       model/
-      api/
       index.ts
-
   entities/
-    user/
-      model/
+    product/
       api/
+      model/
+      ui/
       index.ts
-
   shared/
     api/
-    config/
     lib/
     ui/
 ```
 
-Допустимая зависимость:
+`pages/product` может собрать widget и feature. `features/add-to-cart` импортирует `entities/product`, но entity не знает о feature. Public API экспортирует только компоненты, types и actions, являющиеся контрактом slice.
 
-```ts
-// features/update-profile/model/useUpdateProfile.ts
-import { userApi } from "@/entities/user";
-import { apiClient } from "@/shared/api";
-```
+#### Версии и совместимость
 
-Проблемная зависимость:
+В актуальной документации используются layers `app`, `pages`, `widgets`, `features`, `entities`, `shared`. Layer `processes`, встречающийся в старых материалах FSD, deprecated; долгие сценарии теперь моделируют composition существующих slices и состоянием подходящего owner.
 
-```ts
-// features/update-profile/model/useUpdateProfile.ts
-import { useDeleteAccount } from "@/features/delete-account/model/useDeleteAccount";
-```
+#### Ключевые уточнения
 
-Здесь одна feature лезет во внутренности другой feature. Обычно такой сценарий решают через композицию выше по слою, общий domain contract в `entities` или явный public API, если связь действительно нужна.
-
-#### Частые ошибки
-
-- Считать FSD простой схемой папок без правил зависимостей.
-- Делать `shared` складом всего, что некуда положить.
-- Импортировать внутренности slice вместо public API.
-- Создавать slices по техническому признаку, а не по бизнес-домену.
-- Делать feature слишком большой и смешивать несколько пользовательских сценариев.
-- Выносить код в `entities`, когда это действие пользователя, а не доменная сущность.
-- Внедрять FSD резко во всём legacy-проекте без промежуточных правил и линтинга.
+- FSD задаёт boundaries и import rule, а не только одинаковые названия папок.
+- Layers описывают уровень ответственности, slices - business domain, segments - назначение кода; эти оси нельзя взаимозаменять.
+- Same-layer composition поднимают выше, а общий контракт опускают ниже только при реальной общей ответственности.
+- Public API защищает внутренности одного slice; giant barrel всего layer эту задачу не решает.
+- Небольшой проект использует только нужные layers и усложняет структуру по мере появления реальной связности.
 
 #### Связанные темы
 
 - [[Конспект для подготовки/Architecture/Frontend architecture]]
 - [[Конспект для подготовки/Architecture/State management]]
 - [[Конспект для подготовки/Architecture/API слой и контракты]]
-- [[Конспект для подготовки/Architecture/Feature flags]]
+- [[Конспект для подготовки/Frontend System Design/Проектирование frontend фичи]]
 - [[Конспект для подготовки/Testing/Стратегия тестирования frontend]]
-- [[Конспект для подготовки/React/Redux Toolkit]]
-- [[Конспект для подготовки/React/RTK Query]]
-- [[Конспект для подготовки/Tooling/Build config и production сборка]]
 
 #### Источники
 
 - [Feature-Sliced Design: Overview](https://feature-sliced.design/docs/get-started/overview)
 - [Feature-Sliced Design: Layers](https://feature-sliced.design/docs/reference/layers)
 - [Feature-Sliced Design: Slices and segments](https://feature-sliced.design/docs/reference/slices-segments)
+- [Feature-Sliced Design: Public API](https://feature-sliced.design/docs/reference/public-api)

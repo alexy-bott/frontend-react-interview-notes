@@ -5,99 +5,108 @@ aliases:
   - жизненный цикл Vue
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Компонент Vue проходит фазы создания, монтирования, обновления и размонтирования. В Options API для этого есть хуки вроде `created`, `mounted`, `updated`, `beforeUnmount` и `unmounted`. В Composition API их аналоги вызывают из `setup`: `onMounted`, `onUpdated`, `onBeforeUnmount`, `onUnmounted` и другие. В `setup` нет `this`, поэтому состояние и функции берутся из замыканий, `ref`, `reactive` и composables.
+Экземпляр Vue-компонента создаёт reactive state и render effect, монтирует DOM, обновляет его при изменении зависимостей и в конце размонтируется. Composition API подключается к этим этапам через `onMounted`, `onUpdated`, `onBeforeUnmount`, `onUnmounted` и другие hooks; Options API предоставляет соответствующие options `mounted`, `updated`, `beforeUnmount`, `unmounted`.
 
-Практически правило такое: синхронную подготовку данных можно делать в `setup`, работу с DOM и browser APIs - в `onMounted`, реакции на обновление DOM - в `onUpdated` или через watcher с `flush: "post"`, очистку подписок, таймеров и внешних ресурсов - в `onBeforeUnmount` или `onUnmounted`. Если компонент кэшируется через `<KeepAlive>`, он не всегда размонтируется, поэтому для паузы и возобновления используют `onDeactivated` и `onActivated`.
-
-Если после изменения состояния нужен уже обновлённый DOM, используют `nextTick`. Это важно, потому что Vue батчит reactive updates и применяет DOM patch асинхронно относительно текущего синхронного кода.
+Состояние, computed и watchers создают в `setup`; DOM refs и browser-only integrations используют после mount; внешние listeners, timers, connections и observers очищают при unmount. DOM updates батчатся, поэтому после изменения state актуальный DOM читают через `nextTick` или post-flush watcher. Кешируемый `<KeepAlive>` использует activation/deactivation вместо обычного unmount при переключении.
 
 #### Ключевая схема
 
-| Фаза | Options API | Composition API | Что делать |
-| --- | --- | --- | --- |
-| setup/create | `beforeCreate`, `created` | `setup()` | создать state, computed, watchers |
-| before mount | `beforeMount` | `onBeforeMount` | редко нужен |
-| mounted | `mounted` | `onMounted` | DOM refs, subscriptions, timers |
-| before update | `beforeUpdate` | `onBeforeUpdate` | snapshot до DOM patch |
-| updated | `updated` | `onUpdated` | работа после DOM patch |
-| before unmount | `beforeUnmount` | `onBeforeUnmount` | подготовка очистки |
-| unmounted | `unmounted` | `onUnmounted` | очистить внешние ресурсы |
+```text
+create instance
+-> setup + регистрация effects/hooks
+-> beforeMount
+-> render + mount DOM
+-> mounted
+-> reactive update -> render/patch -> updated
+-> beforeUnmount
+-> stop effects + remove DOM
+-> unmounted
+```
+
+| Задача | Подходящий этап |
+| --- | --- |
+| Создать state/computed/watch | `setup` |
+| Прочитать template ref | `onMounted` |
+| Подключить DOM/third-party library | `onMounted` + cleanup |
+| Прочитать DOM после конкретного state update | `await nextTick()` или `watch(..., { flush: "post" })` |
+| Освободить внешний ресурс | `onBeforeUnmount`/`onUnmounted` по контракту ресурса |
+| Поставить кешируемый экран на паузу | `onDeactivated` |
+| Возобновить кешируемый экран | `onActivated` |
+
+#### Базовая модель
+
+`setup()` выполняется до создания DOM компонента. Здесь Vue знает текущий component instance, поэтому lifecycle hooks и watchers, созданные синхронно, связываются с ним. Callback hook выполняется позже на нужной фазе, но зарегистрировать его нужно во время setup.
+
+`onMounted` вызывается после создания DOM tree компонента, mount всех синхронных child components и вставки дерева в parent container. Async components и descendants внутри `<Suspense>` могут ещё не быть готовы. Template ref становится доступен после mount, но это не означает, что все изображения загрузились или layout стабилизировался.
+
+При изменении реактивной зависимости Vue планирует update, а не patch-ит DOM после каждой записи. `onUpdated` вызывается после DOM update компонента, но не сообщает, какое state вызвало его. Для реакции на конкретное значение используют `watch`; для одного imperative действия после собственной записи - `nextTick`.
 
 #### Развернутый ответ
 
-**`setup`**
+**Cleanup.** Vue останавливает render effect и watchers, синхронно созданные в setup, при unmount. Browser listeners, `setInterval`, WebSocket, `ResizeObserver` и сторонние instances Vue не может очистить автоматически. Owner, который создаёт ресурс, регистрирует его disposal рядом.
 
-`setup` выполняется до mount и не имеет доступа к DOM. Здесь удобно создавать реактивное состояние, computed, watchers, функции и подключать composables.
+**Async-created watchers.** Watcher, созданный асинхронно после setup, может не быть автоматически привязан к component instance. Обычно watcher создают синхронно и условие помещают внутрь callback; если это невозможно, явно вызывают stop handle.
 
-**`onMounted`**
+**`onBeforeUnmount` и `onUnmounted`.** В before-hook instance и DOM ещё полностью функциональны, поэтому можно снять snapshot или уведомить библиотеку до удаления nodes. В unmounted DOM уже удалён, child components размонтированы и reactive effects остановлены; этот этап подходит окончательному освобождению внешних ресурсов.
 
-`onMounted` вызывается после того, как DOM компонента создан и вставлен. Здесь можно читать template refs, подключать DOM listeners, запускать timers и интегрировать сторонние библиотеки, которым нужен реальный DOM.
+**KeepAlive.** Кешируемый component instance при переключении удаляется из активного DOM, но не уничтожается. Его interval или realtime subscription продолжит работать, если cleanup находится только в `onUnmounted`. `onDeactivated` ставит работу на паузу, `onActivated` синхронизирует данные и возобновляет её.
 
-**`onUpdated`**
+**SSR.** Mount/update/unmount hooks не выполняются во время server rendering, потому что сервер не создаёт browser DOM. Для server data dependency существует `onServerPrefetch`; обращения к `window`, DOM и browser APIs размещают в client-only path.
 
-`onUpdated` вызывается после DOM-обновления компонента. Его не используют для изменения того же состояния без условий, иначе можно получить цикл обновлений. Для реакции на конкретное значение обычно применяют `watch`.
-
-**`onUnmounted`**
-
-`onUnmounted` нужен для очистки: `removeEventListener`, `clearInterval`, abort запросов, отписки от store/event bus/websocket. Если ресурс создан в `onMounted`, рядом должна быть понятная очистка.
-
-**`KeepAlive`**
-
-Компонент внутри `<KeepAlive>` может быть деактивирован, но не размонтирован. Например, таймер или websocket иногда нужно ставить на паузу в `onDeactivated` и возобновлять в `onActivated`.
-
-**SSR**
-
-`onMounted` не выполняется на сервере. Для server-side data prefetch во Vue есть `onServerPrefetch`, а browser-only код нужно держать в client-only хуках.
+**Update loops.** Безусловная запись reactive state в `onUpdated` запускает следующий update и может создать цикл. Производное значение вычисляют через `computed`, а измерение DOM обновляет state только при реальном изменении и с защитой от повторов.
 
 #### Пример
 
 ```vue
-<script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+<script setup lang="ts">
+import { nextTick, onMounted, onUnmounted, ref } from "vue";
 
-const count = ref(0);
-const buttonRef = ref(null);
+const buttonRef = ref<HTMLButtonElement | null>(null);
+const expanded = ref(false);
 
-let timerId = null;
+function onResize() {
+  // Считать viewport и обновить только действительно зависящий state.
+}
 
-onMounted(async () => {
-  timerId = window.setInterval(() => {
-    count.value += 1;
-  }, 1000);
-
-  await nextTick();
+onMounted(() => {
+  window.addEventListener("resize", onResize);
   buttonRef.value?.focus();
 });
 
-onBeforeUnmount(() => {
-  if (timerId !== null) {
-    clearInterval(timerId);
-  }
+onUnmounted(() => {
+  window.removeEventListener("resize", onResize);
 });
+
+async function expand() {
+  expanded.value = true;
+  await nextTick();
+  // DOM ветки v-if уже создан, теперь его можно измерить.
+}
 </script>
 
 <template>
-  <button ref="buttonRef" @click="count++">
-    Count: {{ count }}
-  </button>
+  <button ref="buttonRef" type="button" @click="expand">Подробнее</button>
+  <section v-if="expanded">Дополнительная информация</section>
 </template>
 ```
 
-#### Частые ошибки
+Listener принадлежит lifecycle компонента и удаляется при unmount. `nextTick` нужен не для изменения state, а только для операции, зависящей от уже применённого DOM patch.
 
-- Искать `this` внутри `setup`.
-- Читать DOM refs до `onMounted`.
-- Забывать очистку timers, listeners, subscriptions и запросов.
-- Менять состояние внутри `onUpdated` без защиты от циклов.
-- Ожидать, что `onMounted` выполнится при SSR.
-- Забывать про `onActivated`/`onDeactivated` для `<KeepAlive>`.
+#### Ключевые уточнения
+
+- Lifecycle hook регистрируется синхронно в setup, а его callback выполняется позже на соответствующей фазе.
+- `onMounted` означает готовность DOM данного компонента и синхронных children, но не завершение всех async descendants и загрузки ресурсов.
+- Для реакции на конкретную dependency используют `watch`, а не общий `onUpdated`.
+- Vue автоматически останавливает связанные reactive effects, но не может закрыть произвольный внешний browser resource.
+- `<KeepAlive>` меняет lifecycle: деактивация не равна unmount и требует отдельной политики паузы.
 
 #### Связанные темы
 
 - [[Конспект для подготовки/Vue/Реактивность]]
 - [[Конспект для подготовки/Vue/Options API и Composition API]]
+- [[Конспект для подготовки/Vue/Virtual DOM]]
 - [[Конспект для подготовки/JavaScript/AbortController]]
 - [[Конспект для подготовки/JavaScript/Event Loop]]
 
@@ -105,3 +114,5 @@ onBeforeUnmount(() => {
 
 - [Vue: Lifecycle Hooks](https://vuejs.org/guide/essentials/lifecycle.html)
 - [Vue: Composition API Lifecycle Hooks](https://vuejs.org/api/composition-api-lifecycle.html)
+- [Vue: KeepAlive](https://vuejs.org/guide/built-ins/keep-alive.html)
+- [Vue: Server-Side Rendering](https://vuejs.org/guide/scaling-up/ssr.html)

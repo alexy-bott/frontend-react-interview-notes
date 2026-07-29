@@ -6,80 +6,97 @@ aliases:
   - React optimization
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-React performance разбирают через причины и стоимость обновлений. Сам факт render не всегда проблема: проблема возникает, когда часто обновляется большое поддерево, дорогие вычисления выполняются в render, Context заставляет обновляться много consumers, список создаёт тысячи DOM-узлов, или commit вызывает дорогой layout/paint. Поэтому сначала профилируют, а потом выбирают решение.
+Производительность React проверяют по частоте и стоимости конкретных updates. Render сам по себе является нормальной частью работы; проблема возникает, когда пользовательское действие запускает слишком много render, дорогое поддерево пересчитывается без нужды или commit приводит к тяжёлому layout и paint в браузере.
 
-Основные инструменты: React DevTools Profiler, browser Performance panel и иногда `<Profiler>` API. В Profiler смотрят, какие компоненты обновились, сколько занял render, почему они обновились и помогает ли memoization. В браузерном trace смотрят, не ушло ли время после React commit в layout, paint, scripts или long tasks.
-
-Типовые решения: опустить state ниже, разделить Context, стабилизировать props, применить `React.memo/useMemo/useCallback` точечно, виртуализировать большие списки, вынести тяжёлые вычисления из render, использовать transitions для некритичных UI-обновлений, lazy load тяжёлые части экрана и не забывать про server state cache.
+Сначала сценарий записывают в React DevTools Profiler и browser Performance panel. Затем связывают update с его источником - state, props, context или external store - и выбирают решение: локализовать state, убрать цепочку Effects, сузить подписку, мемоизировать измеримо дорогую работу, виртуализировать список или разделить срочные и несрочные updates. После изменения повторяют тот же production-сценарий.
 
 #### Ключевая схема
 
 ```text
-update source -> render cost -> commit cost -> browser work -> user metric
+state/props/context/external store update
+-> React render и reconciliation
+-> commit
+-> browser style/layout/paint
+-> следующий видимый кадр
 ```
 
-| Причина | Симптом | Решение |
+| Наблюдение | Вероятная причина | Направление проверки |
 | --- | --- | --- |
-| State слишком высоко | обновляется большое дерево | локализовать state |
-| Context value новый | много consumers rerender | split context, memoize value |
-| Большой список | много DOM/render work | virtualization |
-| Дорогой selector/filter | input лагает | memo, debounce, worker, index |
-| Нестабильные props | `memo` не помогает | стабилизировать object/function |
-| Hydration тяжёлая | слабый INP после загрузки | меньше client JS, split, islands/SSR strategy |
+| Обновляется большое поддерево | state находится выше реального владельца | опустить state или разделить дерево |
+| Все consumers Context обновляются вместе | меняется общее `value` | разделить contexts или состояние |
+| `memo` не пропускает render | prop получил новую ссылку | найти конкретный нестабильный prop |
+| Один render очень дорогой | вычисление или большой список | измерить calculation, применить memo/virtualization |
+| Commit короткий, кадр поздний | дорогой layout/paint | browser Performance panel |
+| Updates повторяются цепочкой | Effect синхронно устанавливает производный state | вычислить значение во время render или изменить модель |
+
+#### Базовая модель
+
+React 18 запускает render при обновлении state компонента, при render родителя, при изменении используемого context или внешней подписки. Во время render вычисляется следующее описание UI; commit применяет необходимые изменения к DOM. Затем браузер рассчитывает стили, layout и paint. React Profiler измеряет React-часть, но не всю цепочку до кадра.
+
+Количество renders без их длительности мало что говорит. Быстрый render небольшого компонента обычно дешевле сложной мемоизации. И наоборот, один update таблицы с тысячами строк может быть заметен, даже если происходит редко.
+
+Оптимизация должна уменьшать конкретную работу: число затронутых компонентов, стоимость вычисления, количество DOM-узлов или срочность update. Стабильная ссылка сама по себе не ускоряет UI, если ни один consumer не сравнивает её и она не является dependency Hook.
 
 #### Развернутый ответ
 
-React render - это вычисление следующего UI-описания. Commit - применение изменений к host environment, в браузере это DOM. После commit браузер может выполнить style/layout/paint/composite. Поэтому “медленный React” иногда на самом деле является дорогим layout после DOM-изменений.
+**Профилирование.** В React DevTools выбирают медленное взаимодействие, записывают commits и находят самые дорогие компоненты. Проверяют, почему они обновились и насколько `actual duration` отличается после изменения. Dev-сборка и Strict Mode добавляют служебную работу, поэтому окончательный замер проводят на production build с сопоставимым устройством и данными.
 
-React DevTools Profiler показывает render-стоимость компонентов. Если один input приводит к render всего page shell, причина может быть в state location. Если каждый consumer Context обновляется при любом изменении, причина может быть в одном большом provider value. Если memoized child всё равно обновляется, причина может быть в новых object/array/function props.
+**State ownership.** Временный state поля, hover или открытой панели держат у ближайшего общего владельца, которому он нужен. Подъём state к корню удобен, но расширяет область потенциального update. Перенос state вниз часто полезнее `memo`, потому что устраняет саму причину обновления внешнего дерева.
 
-`React.memo`, `useMemo` и `useCallback` работают точечно. Они полезны, когда есть дорогой render/вычисление или ссылка важна для memoized child/effect. Если компонент лёгкий, ручная memoization может добавить шум и не дать выигрыша.
+**Context.** Consumer обновляется, когда значение используемого provider изменилось по `Object.is`. Разделение часто изменяемых и стабильных данных по разным contexts уменьшает область update. Мемоизация объекта `value` помогает только от новых ссылок при тех же данных; она не мешает consumers обновиться при реальном изменении значения.
 
-Для больших списков чаще всего первым решением является virtualization, а не memoization каждой строки. Виртуализация уменьшает количество компонентов и DOM-узлов, то есть снижает и React-работу, и browser layout/paint.
+**Мемоизация.** `React.memo` сравнивает props компонента, `useMemo` кеширует результат вычисления между renders, `useCallback` кеширует ссылку на функцию. Они полезны, когда измерена стоимость или стабильность ссылки позволяет memoized consumer пропустить работу. Кеш `useMemo` является оптимизацией, а не местом хранения состояния и не семантической гарантией.
 
-#### Где применяется во frontend
+**Большие списки.** Virtualization уменьшает число одновременно смонтированных элементов и DOM-узлов. Это обычно сильнее, чем `memo` для каждой из тысяч строк. Для production используют библиотеку, учитывающую размеры, scroll и accessibility, если требования не тривиальны.
 
-| Ситуация | Что профилировать | Возможный фикс |
-| --- | --- | --- |
-| Search input лагает | render на каждый keypress | debounce, memo, worker, transition |
-| Таблица на тысячи строк | DOM size + React commits | virtualization |
-| Form rerenders целиком | field state и subscriptions | field-level state, RHF patterns |
-| Dashboard обновляется по socket | частота updates + chart cost | batching, throttle, snapshot updates |
-| Provider ломает всё дерево | Context consumers | split providers/selectors |
+**Transitions.** `startTransition` и `useDeferredValue` в React 18 помечают update как несрочный, чтобы ввод и другие срочные действия могли оставаться отзывчивыми. Они не уменьшают объём CPU-работы и не ускоряют синхронный алгоритм; тяжёлое вычисление всё равно нужно сократить, разбить или вынести из main thread.
 
-> [!faq]+ Уточнения
-> - React Profiler показывает React render, но не всю browser rendering стоимость.
-> - `useMemo` не предотвращает render компонента; он кеширует значение внутри render.
-> - `useCallback` нужен, когда стабильность ссылки реально используется.
-> - React Compiler относится к build-time tooling и не заменяет архитектуру state.
-> - Transitions помогают приоритизировать UI-обновления, но тяжёлый CPU-код всё равно нужно уменьшать или выносить.
+#### Диагностика
+
+1. Воспроизвести один пользовательский сценарий на production build.
+2. В browser trace убедиться, что задержка действительно связана с scripting/React, а не сетью или layout.
+3. В React Profiler найти дорогой commit и компоненты с наибольшей render cost.
+4. Определить источник update и почему затронут каждый дорогой компонент.
+5. Изменить одну причину и повторить запись с теми же данными.
+6. Проверить видимый результат и метрику взаимодействия, а не только уменьшение числа renders.
 
 #### Пример
 
+`<Profiler>` измеряет render указанного поддерева программно:
+
 ```tsx
-const rows = useMemo(() => {
-  return data.filter((row) => row.name.includes(query));
-}, [data, query]);
+const renderSamples: Array<{
+  id: string;
+  phase: "mount" | "update" | "nested-update";
+  actualDuration: number;
+  baseDuration: number;
+}> = [];
 
-const handleSelect = useCallback((id: string) => {
-  setSelectedId(id);
-}, []);
+function onRender(
+  id: string,
+  phase: "mount" | "update" | "nested-update",
+  actualDuration: number,
+  baseDuration: number,
+) {
+  renderSamples.push({ id, phase, actualDuration, baseDuration });
+}
 
-return <VirtualizedTable rows={rows} onSelect={handleSelect} />;
+<Profiler id="OrdersTable" onRender={onRender}>
+  <OrdersTable />
+</Profiler>
 ```
 
-Здесь memoization помогает только если `data/query` стабильны, а основную нагрузку большого списка снимает virtualization.
+`actualDuration` описывает React render поддерева для commit, но не включает весь последующий layout и paint. `<Profiler>` добавляет overhead; для production-профилирования React требует специальную profiling-сборку, а данные нужно агрегировать, а не отправлять на каждый render без ограничения.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Мемоизировать всё подряд без Profiler.
-- Исправлять React render, хотя bottleneck в layout/paint.
-- Хранить состояние input слишком высоко.
-- Передавать новый object в Context provider на каждый render.
-- Использовать index key в изменяемых списках.
-- Заменять virtualization на ручную memoization тысяч строк.
+- Цель - сократить задержку пользовательского сценария, а не добиться нулевого числа renders.
+- `useMemo` кеширует вычисление внутри компонента и не предотвращает render самого компонента.
+- `useCallback` полезен только там, где стабильность ссылки участвует в сравнении props или dependencies.
+- React Profiler и browser Performance panel отвечают на разные части цепочки; короткий commit не исключает дорогого layout.
+- Transitions меняют приоритет и прерываемость несрочного React update, но не делают тяжёлый JavaScript-алгоритм дешевле.
 
 #### Связанные темы
 
@@ -93,7 +110,7 @@ return <VirtualizedTable rows={rows} onSelect={handleSelect} />;
 
 #### Источники
 
-- [React docs: Profiler](https://react.dev/reference/react/Profiler)
-- [React docs: memo](https://react.dev/reference/react/memo)
-- [React docs: useMemo](https://react.dev/reference/react/useMemo)
-- [React docs: useCallback](https://react.dev/reference/react/useCallback)
+- [React: Profiler](https://react.dev/reference/react/Profiler)
+- [React: memo](https://react.dev/reference/react/memo)
+- [React: useMemo](https://react.dev/reference/react/useMemo)
+- [React: useTransition](https://react.dev/reference/react/useTransition)

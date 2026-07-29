@@ -6,109 +6,100 @@ aliases:
   - DTO
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-API-слой во frontend нужен, чтобы изолировать приложение от деталей backend-контракта. Компоненты не должны в каждом месте знать base URL, headers, refresh flow, формат ошибок, отмену запросов и форму DTO. API-слой централизует transport, авторизацию, обработку ошибок, runtime validation и преобразование внешних данных в доменную модель.
+API-слой является границей между frontend-моделью и внешним сервисом. Он централизует transport configuration, credentials, отмену и ограниченную retry policy, нормализует HTTP/network errors, проверяет внешний JSON и преобразует Data Transfer Object (DTO) во внутреннюю модель.
 
-Важно различать DTO и доменную модель. DTO - это то, что пришло по сети. Доменная модель - удобная и проверенная форма для приложения. TypeScript помогает описать ожидания, но не проверяет внешний JSON в runtime, поэтому на границе полезны схемы или type guards. Тогда контракт ломается в одном понятном месте, а не случайно в JSX.
+Компонент или use case вызывает операцию на языке приложения, например `getCurrentUser()`, и получает проверенный `User` либо типизированную ошибку. Он не должен повторять base URL, headers, refresh flow и структуру backend response. OpenAPI/codegen помогает поддерживать transport contract, но TypeScript types сами не проверяют фактические данные во время выполнения.
 
 #### Ключевая схема
 
 ```text
-fetch/http client
--> auth headers / credentials
--> cancellation / timeout
--> status and error mapping
--> runtime validation
--> DTO -> domain model
--> query/cache/UI
+component/use case
+-> query/service operation
+-> request policy: URL, credentials, abort
+-> HTTP response
+-> status/error normalization
+-> parse unknown + runtime validation
+-> DTO adapter
+-> domain/view model
 ```
 
-| Зона | Что решить |
+| Уровень | Ответственность |
 | --- | --- |
-| Transport | `fetch`, axios, retries, timeout, abort |
-| Auth | cookies, bearer token, refresh, logout |
-| Errors | network/status/domain validation errors |
-| Contracts | OpenAPI/Swagger, schemas, generated types |
-| Validation | Zod/type guards на границе |
-| Mapping | DTO не протекает глубоко в UI |
-| Collections | pagination/filtering/sorting/search как часть cache key |
+| HTTP client | transport, headers, body, credentials, abort |
+| Auth integration | single refresh, повтор запроса, logout policy |
+| Contract parser | проверка `unknown` response |
+| Adapter | DTO -> domain/view model |
+| Query/cache | freshness, key, deduplication, invalidation |
+| UI | loading/error/success и пользовательское восстановление |
+
+#### Базовая модель
+
+`fetch` возвращает fulfilled Promise даже для `404` или `500`; отклонение происходит при network failure, abort и некоторых request errors. Поэтому API client отдельно проверяет `response.ok`, безопасно разбирает body и сохраняет status/request id для диагностики.
+
+`response.json()` имеет внешнее содержимое. Аннотация generic или `as User` меняет только мнение TypeScript и не создаёт runtime-check. Parser/schema принимает `unknown`, либо возвращает валидный DTO, либо создаёт contract error рядом с границей.
+
+DTO отражает форму передачи: `full_name`, nullable fields, ISO strings. Domain/view model отражает потребности приложения: `name`, проверенный enum, объект даты только если выбранная модель действительно этого требует. Adapter не должен прятать business decision, не связанное с переводом контракта.
 
 #### Развернутый ответ
 
-Прямой `fetch` в компоненте допустим в маленьком примере, но в продукте быстро появляются повторяющиеся правила: base URL, credentials, auth headers, refresh flow, `401/403/404/409/422`, abort, retries, timeout, logging и единый формат ошибок. Если эти правила размазаны по компонентам, разные экраны начинают вести себя по-разному.
+**Errors.** Network failure, timeout/abort, HTTP status, invalid response и domain rejection имеют разные причины и способы восстановления. `401` может запускать согласованный refresh, `403` - показывать отсутствие права, `409` - конфликт версии, `422` - field errors. Backend может использовать Problem Details (`application/problem+json`) как общий формат, но domain codes всё равно согласуются отдельно.
 
-Граница API-слоя - место, где внешний JSON превращается во внутреннюю модель приложения. DTO отражает контракт backend, а domain model отражает удобную форму для UI и бизнес-логики. Это позволяет менять backend-поля, нормализовать даты, переименовывать snake_case в camelCase и не протаскивать внешний формат в JSX.
+**Retries.** Автоматический retry безопасен не для каждой операции. Повтор идемпотентного GET после временного network/`5xx` сбоя обычно допустим с limit/backoff. Повтор создания платежа или заказа требует idempotency key и server contract; frontend не может гарантировать отсутствие первого успешного выполнения после потерянного ответа.
 
-TypeScript описывает ожидания на этапе разработки, но не проверяет runtime JSON. Поэтому `response.json() as User` не защищает от сломанного backend-ответа. На критичных границах используют schemas, type guards или generated clients с runtime validation, чтобы ошибка контракта возникала рядом с API, а не случайно в компоненте.
+**Cancellation.** `AbortController` прекращает ожидание и обработку response на клиенте, но не гарантирует отмену уже начавшейся server operation. Отмена защищает UI от ненужной работы; правильный порядок результатов также обеспечивается query key, request identity или проверкой актуального input.
 
-Ошибки стоит разделять по природе: network error, HTTP status error, validation error, business/domain error. Для UI это разные сценарии: re-auth, forbidden, not found, conflict, form errors, retry или fallback. Для observability это тоже разные уровни важности и разные диагностические поля.
+**Auth.** Refresh централизуют и выполняют single-flight, чтобы несколько `401` не создали refresh storm. Исходный request повторяют ограниченное число раз; refresh endpoint не должен рекурсивно запускать собственный refresh.
 
-Auth flow - часть API boundary. API-слой должен знать, когда добавить `Authorization`, когда отправить `credentials`, как обработать `401`, как не запустить несколько refresh-запросов одновременно и когда очистить user/cache state. Компонент получает уже понятный результат: user загружен, access denied, unauthenticated или form/server error.
+**Query parameters.** Serialization filters/sort/page является частью контракта. Все параметры результата входят в query key. API function не обязана владеть cache, но должна принимать нормализованные arguments, чтобы cache layer мог различать requests.
 
-Отмена запросов защищает UI от устаревших обновлений. `AbortController` или механизм query-библиотеки нужен при смене страницы, быстром вводе в search, повторных запросах и race conditions, когда более старый ответ приходит позже нового.
-
-Коллекции требуют отдельной политики. API-слой должен одинаково сериализовать filters/sort/search, сбрасывать page/cursor при изменении параметров, включать эти параметры в cache key и не смешивать данные разных запросов. Для infinite scroll важно хранить страницы и cursor, а для таблиц - page, limit, total и текущую сортировку.
-
-OpenAPI/codegen не отменяет маппинг DTO в domain model. Сгенерированный тип описывает внешний контракт, а UI часто работает с другой формой: подготовленные даты, вычисленные флаги, объединённые поля, нормализованные enum-значения. Чем ближе к компонентам протекает DTO, тем дороже менять backend-контракт.
-
-> [!faq]+ Уточнения
-> - API-слой централизует transport, auth, errors, cancellation, validation и mapping.
-> - DTO - внешний контракт, domain model - удобная внутренняя форма приложения.
-> - `as Type` после `json()` не валидирует данные в runtime.
-> - OpenAPI может генерировать типы и клиент, но runtime-ответ всё равно приходит извне.
-> - `401`, `403`, `404`, `409`, `422` не должны выглядеть одинаково для UI.
-> - Pagination/filtering/sorting/search входят в query key/cache key.
-> - Generated DTO и domain model можно связывать маппером, а не протаскивать DTO в JSX.
-> - Auth headers, credentials, refresh и logout централизуют в API-слое.
+**Generated client.** OpenAPI генерирует request types и client, снижая ручное расхождение. Он не определяет UX errors, cache policy и domain model; runtime validation зависит от generator/configuration и не предполагается автоматически.
 
 #### Пример
+
+Сокращённая операция использует project abstractions `ApiError` и `parseApiUserDto`:
 
 ```ts
 type ApiUserDto = {
   id: number;
   full_name: string;
-  avatar_url: string | null;
 };
 
 type User = {
   id: number;
   name: string;
-  avatarUrl: string | null;
 };
 
-function mapUser(dto: ApiUserDto): User {
-  return {
-    id: dto.id,
-    name: dto.full_name,
-    avatarUrl: dto.avatar_url,
-  };
-}
-
-async function request<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(url, {
+async function getCurrentUser(signal?: AbortSignal): Promise<User> {
+  const response = await fetch("/api/me", {
     credentials: "include",
     signal,
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw await ApiError.fromResponse(response);
   }
 
-  return response.json() as Promise<T>;
+  const json: unknown = await response.json();
+  const dto: ApiUserDto = parseApiUserDto(json);
+
+  return {
+    id: dto.id,
+    name: dto.full_name,
+  };
 }
 ```
 
-В production-варианте после `json()` добавляют runtime validation, а не доверяют `as Promise<T>`.
+`ApiError.fromResponse` нормализует status и безопасные details, а `parseApiUserDto` выполняет runtime validation. Эти функции являются отдельными контрактами API-слоя, а не type assertions.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Размазывать API-логику по компонентам.
-- Использовать `response.json() as Type` как полноценную защиту контракта.
-- Не отличать DTO от модели, с которой удобно работать UI.
-- Не отменять устаревшие запросы.
-- Обрабатывать `401`, `403`, `404`, `409`, `422` одинаково.
-- Логировать tokens, cookies или персональные данные.
+- TypeScript описывает ожидаемый response при разработке, но runtime JSON остаётся `unknown` до проверки.
+- HTTP client, contract parser, adapter и query cache решают разные задачи и могут быть отдельными слоями одной boundary.
+- Abort прекращает client-side work, но не является гарантированной отменой server transaction.
+- Retry зависит от идемпотентности операции и server contract, а не включается одинаково для всех methods.
+- Generated DTO не обязан быть удобной domain model; codegen не отменяет mapping и UX error policy.
 
 #### Связанные темы
 
@@ -116,16 +107,10 @@ async function request<T>(url: string, signal?: AbortSignal): Promise<T> {
 - [[Конспект для подготовки/Patterns/Adapter и Facade во frontend]]
 - [[Конспект для подготовки/Web Basics/HTTP status codes и ошибки API]]
 - [[Конспект для подготовки/Web Basics/OpenAPI и Swagger]]
-- [[Конспект для подготовки/Web Basics/API pagination filtering sorting]]
 - [[Конспект для подготовки/Web Basics/Auth flow и refresh tokens]]
 - [[Конспект для подготовки/JavaScript/Fetch и работа с API]]
 - [[Конспект для подготовки/JavaScript/AbortController]]
-- [[Конспект для подготовки/React/Server state и React Query]]
 - [[Конспект для подготовки/React/RTK Query]]
-- [[Конспект для подготовки/Web Basics/Realtime transports]]
-- [[Конспект для подготовки/Web Basics/WebSocket]]
-- [[Конспект для подготовки/Web Basics/HTTP запрос]]
-- [[Конспект для подготовки/Web Basics/Cookies и авторизация]]
 
 #### Источники
 
@@ -133,4 +118,3 @@ async function request<T>(url: string, signal?: AbortSignal): Promise<T> {
 - [MDN: AbortController](https://developer.mozilla.org/en-US/docs/Web/API/AbortController)
 - [OpenAPI Specification](https://spec.openapis.org/oas/latest.html)
 - [RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457.html)
-- [Zod](https://zod.dev/)

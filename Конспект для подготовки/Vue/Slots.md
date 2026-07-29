@@ -6,86 +6,67 @@ aliases:
   - named slots
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Slots во Vue позволяют родителю передавать разметку внутрь заранее определённых мест дочернего компонента. Дочерний компонент описывает точки вставки через `<slot>`, а родитель решает, какой контент туда передать. Это нужно, когда компонент должен контролировать каркас и поведение, но не должен жёстко знать всё содержимое: layout, modal, table, card, page shell.
+Slots позволяют родителю передать template fragment в точки, которые определил дочерний компонент. Дочерний компонент управляет каркасом и выводит `<slot>`, а родитель управляет содержимым. Это композиция UI: props передают данные и настройки, slots - произвольную разметку.
 
-Есть default slot, named slots и scoped slots. Default slot используется без имени. Named slots позволяют разделить области вроде `header`, `default`, `footer`. Scoped slot означает, что ребёнок передаёт данные наружу через slot props, а родитель использует эти данные в своём шаблоне. Важно: контент слота вычисляется в scope родителя, а slot props приходят из ребёнка.
-
-В Vue 3 slots внутри runtime - это функции. Поэтому тяжёлый slot content может пересчитываться при обновлениях, а для сложных компонентов важно аккуратно проектировать props, keys и структуру render-а. Для устойчивости можно задавать fallback content внутри `<slot>`, который отрендерится, если родитель ничего не передал.
+Default slot обслуживает основную область, named slots разделяют области вроде header/footer, а scoped slot передаёт данные ребёнка родительскому template через slot props. Содержимое слота компилируется в scope родителя и не видит локальный state ребёнка, если ребёнок явно не передал его через props слота.
 
 #### Ключевая схема
 
-| Вид слота | Синтаксис ребёнка | Синтаксис родителя |
+```text
+parent определяет slot content
+-> передаёт slot function child component
+-> child вызывает её в <slot outlet>
+-> slot props идут child -> parent template
+-> VNodes вставляются в структуру child
+```
+
+| Вид | Child outlet | Parent content |
 | --- | --- | --- |
-| Default | `<slot />` | обычный контент внутри компонента |
+| Default | `<slot />` | обычное содержимое компонента |
 | Named | `<slot name="header" />` | `<template #header>` |
 | Scoped | `<slot :item="item" />` | `<template #default="{ item }">` |
-| Fallback | `<slot>Empty</slot>` | используется, если слот не передан |
+| Fallback | `<slot>Нет данных</slot>` | используется при отсутствии content |
+
+#### Базовая модель
+
+Slot похож на функцию: child вызывает slot и передаёт объект props, а функция возвращает VNodes из template родителя. Такая модель объясняет scope. Выражение `{{ title }}` внутри slot ищет `title` в parent component; получить `childTitle` можно только через `<slot :title="childTitle">` и destructuring slot props у родителя.
+
+Named slots задают контракт областей компонента. `Card` может предоставить `header`, default body и `actions`. Имя должно описывать роль области, а не текущий визуальный placement: `actions` устойчивее, чем `bottomRight`.
+
+Scoped slot полезен для headless-компонента: child владеет данными, выбором или keyboard behavior, но parent решает, как отобразить строку. Если parent должен только передать строку или флаг, обычный prop проще.
 
 #### Развернутый ответ
 
-**Default slot**
+**Fallback.** Содержимое внутри `<slot>` отображается, если parent не передал соответствующий slot. Это позволяет дать разумный default без проверки в каждом consumer. Наличие named slot можно проверить через `$slots` или `useSlots`, когда от него зависит дополнительная wrapper-разметка.
 
-```vue
-<!-- Card.vue -->
-<template>
-  <article class="card">
-    <slot />
-  </article>
-</template>
-```
+**Slot props.** Child выбирает контракт и передаёт только необходимые значения и actions. Передача всего внутреннего state наружу связывает parent с реализацией. Для списка достаточно `item`, `index` и, возможно, действия `select(item)`; внутренний cache или refs оставляют закрытыми.
 
-```vue
-<Card>
-  <h2>Title</h2>
-  <p>Content</p>
-</Card>
-```
+**Props или slot.** Prop подходит данным, enum-варианту, boolean-настройке и callback. Slot нужен, когда consumer должен создать несколько элементов, добавить собственный компонент или контролировать markup. API из десятков узких slots может стать сложнее обычного специализированного компонента.
 
-**Named slots**
+**Performance и обновления.** Runtime представляет slots функциями, которые child вызывает при render. Это позволяет Vue отслеживать зависимости slot content в подходящем rendering context. Тяжёлая разметка всё равно создаёт VNodes при соответствующих updates; slots не являются автоматической memoization.
 
-```vue
-<!-- Layout.vue -->
-<template>
-  <header>
-    <slot name="header" />
-  </header>
+**Доступность.** Slot даёт свободу разметки, но child должен объяснять семантический контракт. Если slot `trigger` обязан быть фокусируемой кнопкой, произвольный `div` может сломать компонент. Для сложного headless API используют ограничения, runtime warnings или библиотечные primitives с documented contract.
 
-  <main>
-    <slot />
-  </main>
+#### Пример
 
-  <footer>
-    <slot name="footer" />
-  </footer>
-</template>
-```
-
-```vue
-<Layout>
-  <template #header>
-    <h1>Dashboard</h1>
-  </template>
-
-  <p>Main content</p>
-
-  <template #footer>
-    <small>Footer</small>
-  </template>
-</Layout>
-```
-
-**Scoped slots**
-
-Scoped slot используют, когда ребёнок управляет данными или состоянием, но родитель хочет сам определить разметку.
+Child владеет перебором данных и передаёт каждой строке узкий slot contract:
 
 ```vue
 <!-- UserList.vue -->
+<script setup lang="ts">
+import type { User } from "./types";
+
+defineProps<{
+  users: User[];
+}>();
+</script>
+
 <template>
   <ul>
-    <li v-for="user in users" :key="user.id">
-      <slot :user="user">
+    <li v-for="(user, index) in users" :key="user.id">
+      <slot name="user" :user="user" :index="index">
         {{ user.name }}
       </slot>
     </li>
@@ -95,34 +76,31 @@ Scoped slot используют, когда ребёнок управляет �
 
 ```vue
 <UserList :users="users">
-  <template #default="{ user }">
-    <strong>{{ user.name }}</strong>
+  <template #user="{ user, index }">
+    <strong>{{ index + 1 }}. {{ user.name }}</strong>
+    <RouterLink :to="`/users/${user.id}`">Открыть</RouterLink>
   </template>
 </UserList>
 ```
 
-**Scope**
+`users` и `RouterLink` принадлежат scope родителя, а `user/index` переданы дочерним компонентом. Если slot не задан, используется fallback с именем пользователя.
 
-Слот-контент пишется в родительском template, поэтому имеет доступ к переменным родителя. Но данные, которые передал ребёнок, доступны через slot props.
+#### Ключевые уточнения
 
-**Когда нужны slots вместо props**
-
-Props подходят для данных и простых вариантов поведения. Slots используют, когда нужно передать произвольную разметку, несколько областей компонента или дать родителю контроль над тем, как отображается элемент.
-
-#### Частые ошибки
-
-- Путать имя слота: `name="header"` в ребёнке и `#header` у родителя должны совпадать.
-- Ожидать, что слот-контент имеет доступ к локальным переменным ребёнка без slot props.
-- Передавать строку вместо выражения из-за пропущенного `:`.
-- Делать слишком тяжёлый slot content в часто обновляемом компоненте.
-- Использовать slots там, где достаточно простого prop.
+- Parent определяет slot content, child определяет outlet и slot props; это две стороны одного контракта.
+- Slot content имеет lexical scope родителя и получает локальные значения ребёнка только через scoped slot props.
+- Props передают данные, slots передают структуру UI. Выбор делается по требуемой свободе consumer.
+- Fallback является default content, а не отдельным slot mode.
+- Свобода slot composition не отменяет семантику и accessibility-контракт сложного компонента.
 
 #### Связанные темы
 
 - [[Конспект для подготовки/Vue/Virtual DOM]]
 - [[Конспект для подготовки/Vue/Options API и Composition API]]
+- [[Конспект для подготовки/Patterns/Compound Components и Headless UI]]
 - [[Конспект для подготовки/React/Преимущества React]]
 
 #### Источники
 
 - [Vue: Slots](https://vuejs.org/guide/components/slots.html)
+- [Vue: Render Functions and Slots](https://vuejs.org/guide/extras/render-function.html#passing-slots)

@@ -7,9 +7,9 @@ aliases:
   - frontend env variables
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Env-файлы во frontend нужны, чтобы подставлять разные значения для разных окружений: API URL, base path, feature flags, Sentry DSN, build metadata. Но frontend env не являются настоящими секретами: всё, что попало в клиентский bundle или публичный runtime config, может увидеть пользователь.
+Env-файл — один из источников configuration для build tool/process, а не защищённое хранилище и не автоматический runtime mechanism. Vite загружает mode-specific files и статически подставляет client-exposed `VITE_*`; Next.js inlines `NEXT_PUBLIC_*` при build. Всё доставленное browser является публичным.
 
 В Vite клиенту доступны только переменные с prefix `VITE_*`, например `VITE_API_URL`. В Next.js переменные с prefix `NEXT_PUBLIC_*` встраиваются в client bundle, а обычные env-переменные доступны на серверной стороне: Server Components, Route Handlers, Server Actions, build/runtime server code.
 
@@ -29,6 +29,10 @@ Env-файлы во frontend нужны, чтобы подставлять ра�
 | server-only env | секреты и приватные значения на backend/SSR side |
 | CI/CD variables | значения, которые pipeline передаёт во время build/deploy |
 
+#### Базовая модель
+
+Нужно независимо определить три свойства value: кто может его видеть (public/secret), когда оно читается (build/runtime) и для какого environment/mode предназначено. Имя файла или prefix решает только часть этой модели.
+
 #### Развернутый ответ
 
 **Env во frontend часто является build-time конфигурацией.**
@@ -40,13 +44,15 @@ Vite не отдаёт в клиент все env-переменные подр�
 **Все env values приходят строками.**
 `VITE_FEATURE_ENABLED=false` в коде может быть строкой `"false"`, которая truthy. Поэтому boolean, number, URL, enum-like values лучше парсить и валидировать в одном месте.
 
+TypeScript declaration для `ImportMetaEnv` даёт autocomplete/type assumption, но не проверяет, что variable реально присутствует при build. Runtime parser/config module должен fail fast с понятной ошибкой.
+
 **`.env.local` не должен быть способом хранить секреты frontend-а.**
 Локальный файл может содержать private значения для server-side кода, но если переменная используется в клиентском bundle, она станет видимой. Для настоящих secrets нужен backend endpoint, serverless/edge function, BFF, Route Handler или другой server-side слой.
 
 **В CI важно понимать момент подстановки.**
 Если `VITE_API_URL` или `NEXT_PUBLIC_API_URL` подставляется во время build, то Docker image или static artifact уже содержит это значение. Для разных окружений нужно либо собирать отдельные artifacts, либо иметь runtime-конфигурацию через server/CDN/HTML injection, если проект это поддерживает.
 
-#### Где применяется во frontend
+#### Практическое применение
 
 | Ситуация | Что важно |
 | --- | --- |
@@ -57,13 +63,6 @@ Vite не отдаёт в клиент все env-переменные подр�
 | Next.js SSR | обычные env можно читать на сервере |
 | Static SPA | env чаще всего зашиты во время build |
 | Docker image | build-time env и runtime env могут отличаться |
-
-#### Если уточнили
-
-> - **Почему нельзя положить API token в `VITE_API_TOKEN`?** Потому что значение попадёт в клиентский JS bundle и будет доступно пользователю.
-> - **Чем `mode` отличается от `NODE_ENV` в Vite?** `mode` выбирает env-файлы вроде `.env.staging`, а `NODE_ENV` влияет на development/production поведение экосистемы.
-> - **Почему env поменяли, а приложение всё ещё ходит на старый API?** Если значение было встроено на build step, нужно пересобрать artifact или использовать runtime-config подход.
-> - **Нужно ли типизировать env?** Да. Лучше иметь модуль `config/env.ts`, который читает, парсит и валидирует значения.
 
 #### Пример
 
@@ -83,14 +82,15 @@ export const env = {
 
 Такой подход лучше, чем читать `import.meta.env` по всему приложению: правила парсинга и fallback-логика находятся в одном месте.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Класть secrets в `VITE_*` или `NEXT_PUBLIC_*`.
-- Думать, что `.env.local` автоматически безопасен для клиентского кода.
-- Не парсить boolean/number env values.
-- Менять runtime env после build и ожидать, что static bundle сам изменится.
-- Коммитить `.env.local` или `.env.production.local`.
-- Разбрасывать чтение env по всему приложению.
+- Prefix `VITE_`/`NEXT_PUBLIC_` означает разрешение раскрыть value client, а не защиту.
+- Vite `mode` выбирает набор `.env.[mode]`, но `vite build --mode staging` остаётся production build.
+- Env values являются strings; parsing и validation централизуют до использования application code.
+- Type declarations не заменяют runtime presence/value validation.
+- Static client bundle не перечитывает container env после build; нужен rebuild или public runtime config.
+- `loadEnv(..., "")` загружает и private values в config process: наружу передают только явный allowlist.
+- Правила хранения/rotation secrets раскрыты отдельно в [[Конспект для подготовки/DevOps/Env variables и секреты]].
 
 #### Связанные темы
 

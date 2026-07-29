@@ -8,11 +8,11 @@ aliases:
   - aliases env assets
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
 Build config описывает путь от исходного кода до deployable artifact: как приложение стартует, как резолвятся импорты, какие env-переменные попадают в клиент, как обрабатываются CSS/assets, как работает dev proxy, какие sourcemaps создаются, куда кладётся production output и как настраиваются chunks.
 
-В Vite базовые зоны настройки - `plugins`, `resolve.alias`, `server.proxy`, `base`, `build`, `import.meta.env`. На 16 июля 2026 актуальная документация Vite показывает ветку v8.1.5, где production build настраивается через `build.rolldownOptions`; dev server работает вокруг native ESM и HMR. В Webpack конфиг читается через `entry`, `output`, `resolve`, `module.rules`, `plugins`, `devServer`, `devtool`, `optimization`.
+В Vite базовые зоны — `plugins`, `resolve.alias`, `server.proxy`, `base`, `build`, `import.meta.env`; Vite 8 advanced bundling настраивается через Rolldown, старые majors — через versioned Rollup/esbuild options. Webpack config читается через `entry`, `output`, `resolve`, `module.rules`, `plugins`, `devServer`, `devtool`, `optimization`.
 
 Главный практический риск - перепутать dev и production. `server.proxy` и `devServer.proxy` работают только локально; production routing настраивается в Nginx/CDN/backend/hosting. `VITE_*`, `DefinePlugin` и похожие compile-time constants попадают в клиентский JavaScript, поэтому туда кладут только публичную конфигурацию. Production build проверяют отдельно: dev server не доказывает корректность `base/publicPath`, hashed assets, routes, sourcemaps и static serving.
 
@@ -31,6 +31,10 @@ Build config описывает путь от исходного кода до d
 | Как делится код? | dynamic import, build options | `splitChunks`, dynamic import | initial bundle и lazy chunks |
 | Что проверяет CI? | `vite build` + preview/smoke | production webpack build | deployable artifact |
 
+#### Базовая модель
+
+Build config — набор contracts между source, toolchain и hosting: module graph должен разрешиться, browser target — получить поддерживаемый syntax/polyfills policy, public config — встроиться без secrets, output URLs — совпасть с deploy path, а hashed assets/HTML — получить совместимую cache policy.
+
 #### Развернутый ответ
 
 Build config удобно читать как набор контрактов. Первый контракт - entry и output: откуда начинается приложение и какие файлы получаются после сборки. Для SPA это обычно HTML, JS/CSS chunks, fonts/images и manifest-like связи между ними. В production файлы часто получают content hash, чтобы сервер мог кешировать assets долго, а `index.html` обновлялся быстрее.
@@ -41,15 +45,9 @@ Build config удобно читать как набор контрактов. �
 
 Четвёртый контракт - dev/prod различия. Dev server отвечает за скорость разработки: HMR, proxy, удобные sourcemaps, history fallback. Production build отвечает за deploy: minification, hashed filenames, code splitting, static assets, browser target, sourcemaps policy. Поэтому перед релизом проверяют именно production artifact: build, preview/static serving, smoke route, загрузку assets и работу API base URL.
 
-Пятый контракт - static serving. `base` в Vite и `publicPath` в Webpack должны соответствовать месту, где приложение реально доступно: корень домена, поддиректория или CDN. Ошибка в этом месте проявляется не в TypeScript, а в браузере: HTML загрузился, но JS/CSS/images идут по неверным URL.
+TypeScript transform, lint, tests и production build являются отдельными gates. Bundler может успешно emit-нуть code с type error, а typecheck не обнаружит неправильный `base`, missing asset или unsupported browser syntax. Browser target также не гарантирует автоматическую polyfill всех missing runtime APIs.
 
-> [!faq]+ Уточнения
-> - Alias нужно синхронизировать между bundler, TypeScript, тестами и IDE.
-> - Dev proxy решает локальную разработку, но не production routing.
-> - Build-time env в SPA нельзя изменить после сборки без runtime config или новой сборки.
-> - `base/publicPath` влияет на URL итоговых JS/CSS/assets.
-> - Sourcemaps выбирают по балансу debug и риска раскрытия исходников.
-> - Production artifact проверяют отдельно от dev server.
+Пятый контракт - static serving. `base` в Vite и `publicPath` в Webpack должны соответствовать месту, где приложение реально доступно: корень домена, поддиректория или CDN. Ошибка в этом месте проявляется не в TypeScript, а в браузере: HTML загрузился, но JS/CSS/images идут по неверным URL.
 
 #### Пример
 
@@ -57,14 +55,14 @@ Build config удобно читать как набор контрактов. �
 // vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   plugins: [react()],
   base: "/app/",
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src"),
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
   server: {
@@ -83,16 +81,16 @@ export default defineConfig({
 
 Для такого config отдельно проверяют: `@` есть в `tsconfig`, `/app/` совпадает с production path, `/api` в production обрабатывает сервер/hosting, `VITE_*` содержит только публичные значения, production artifact открывается через static serving.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Настроить alias только в bundler и забыть TypeScript/tests.
-- Использовать dev proxy как production routing.
-- Класть secrets в `VITE_*` или `DefinePlugin`.
-- Не учитывать, что env values в Vite приходят строками.
-- Деплоить SPA в поддиректорию без корректного `base/publicPath`.
-- Проверять только dev server и не запускать production build.
-- Публиковать подробные sourcemaps без осознанной политики доступа.
-- Делить код на chunks без проверки waterfall и initial bundle.
+- Alias синхронизируют по resolution semantics, но не обязаны копировать config вручную, если plugin читает единый source.
+- Dev proxy/history fallback не входят в artifact и не определяют production routing.
+- Build-time public env заморожена в client output; secret не передают в bundler replacement.
+- `base/publicPath` проверяют на direct navigation, dynamic chunks, CSS URLs, fonts и service worker scope.
+- Browser target управляет syntax transforms, но missing Web API может потребовать отдельный polyfill/feature strategy.
+- `hidden` source map не содержит reference в emitted JS, но сам `.map` остаётся чувствительным, если опубликован.
+- Production verification использует actual artifact и hosting-like server; `vite preview` не является production server policy.
+- Chunk strategy оценивают по initial route, waterfall, cache churn и interaction latency.
 
 #### Связанные темы
 

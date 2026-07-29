@@ -7,107 +7,95 @@ aliases:
   - UI patterns
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Compound Components - это UI-паттерн, где один компонент состоит из связанных частей: например, `Tabs.Root`, `Tabs.List`, `Tabs.Trigger`, `Tabs.Content`. Части собираются снаружи, но связаны общим состоянием через context. Headless UI - подход, где компонент даёт поведение, accessibility и state machine, но почти не навязывает внешний вид.
+Compound Components («составные компоненты») - способ спроектировать API сложного UI как набор согласованных частей, например `Tabs.Root`, `Tabs.List`, `Tabs.Trigger` и `Tabs.Content`. Вызывающий код управляет композицией частей, а общий owner связывает их состоянием и контрактом.
 
-Во frontend эти паттерны важны для design system и сложных компонентов: tabs, accordion, dialog, select, dropdown, combobox, tooltip, table, form field. Они позволяют отделить поведение от visual layer и дать разработчику гибкость композиции.
-
-Главная сложность - контракт. Compound/headless-компоненты должны явно описывать, какие части обязательны, как передаются state/props/ref, какие ARIA-связи сохраняются и где проходит граница ответственности.
+Headless-компонент предоставляет состояние и поведение, включая keyboard navigation и accessibility, но не навязывает готовый визуальный стиль. Эти идеи независимы и часто используются вместе: библиотека может дать headless Tabs через compound API, а приложение добавит собственные CSS-классы и design tokens.
 
 #### Ключевая схема
 
-| Паттерн | Что даёт | Пример |
+| Вопрос | Compound Components | Headless UI |
 | --- | --- | --- |
-| Compound Components | связанный набор UI-частей | `Tabs.Root`, `Tabs.Trigger`, `Tabs.Content` |
-| Headless UI | поведение без жёсткого внешнего вида | Radix Select/Dialog |
-| Context внутри | общее состояние частей | active tab, open state |
-| `asChild` / slots | заменить DOM-элемент своим компонентом | Radix + design system button |
+| Что отделяется | монолитный компонент на связанные части | поведение от визуального оформления |
+| Что контролирует consumer | состав и расположение частей | стили, tokens и часто разметку в разрешённых границах |
+| Что остаётся у реализации | связи частей и общий state | state machine, события, focus и ARIA-контракт |
+| Можно ли использовать отдельно | да | да |
 
 ```text
-Root owns state/context
--> child parts consume context
--> caller controls composition and markup
+Root владеет state/context
+-> parts получают общий contract
+-> primitive обеспечивает поведение
+-> design system добавляет внешний вид
 ```
+
+#### Базовая модель
+
+Монолитный API вида `<Tabs items={items} />` прост, пока структура всех tabs одинакова. Когда экрану нужно добавить badge в trigger, расположить панели по-другому или вставить дополнительные элементы, число специальных props начинает расти. Compound API отдаёт композицию consumer, сохраняя связь частей через `Root`.
+
+Headless-подход решает другую задачу. Поведение `Dialog`, `Select` или `Tabs` сложнее их внешнего вида: нужно управлять focus, клавиатурой, ролями, состояниями и связями между элементами. Реализация предоставляет этот контракт, а проект задаёт цвет, размеры, spacing и анимацию.
+
+Для простого `Button`, у которого мало частей и стабильная разметка, compound API обычно не нужен. Headless primitive особенно полезен для интерактивных виджетов с нетривиальным accessibility-контрактом, но его ограничения нужно принять: полностью произвольная разметка может нарушить поведение.
 
 #### Развернутый ответ
 
-Compound Components помогают, когда один компонент логически состоит из нескольких частей, но пользователь библиотеки должен контролировать разметку. Tabs - хороший пример: есть общий active value, список триггеров и контентные панели. Если всё спрятать в один монолитный `<Tabs items={...} />`, кастомизация станет трудной. Если отдать части наружу, API становится гибче.
+**Связь частей.** `Root` может хранить state внутри или получать `value/onValueChange` для controlled-режима. Context передаёт состояние, id и callbacks вложенным частям без ручного прокидывания props через каждый уровень. Часть, используемая вне своего `Root`, должна выдавать понятную ошибку.
 
-Headless UI отделяет поведение от стилей. Например, Dialog должен управлять focus trap, Escape, aria, portal и scroll lock. Но цвет, spacing, animation и tokens зависят от дизайн-системы проекта. Headless component закрывает сложное поведение, а внешний слой задаёт внешний вид.
+**Контракт Tabs.** Вкладки - не только `aria-selected`. Trigger имеет роль tab и связан с panel, активный tab участвует в tab order, а стрелки перемещают focus в соответствии с выбранной моделью активации. Самодельный сокращённый пример легко пропускает эти правила, поэтому для production разумно использовать проверенный primitive и стилизовать его.
 
-В React compound-компоненты часто строятся через context: `Root` хранит состояние, `Trigger` меняет его, `Content` читает и решает, показываться или нет. В Vue похожая гибкость достигается через slots/scoped slots и composables.
+**Controlled и uncontrolled.** Uncontrolled primitive сам хранит выбранное значение и удобен для локального сценария. Controlled-вариант получает значение от consumer и нужен, когда state синхронизируется с URL, формой или другой частью приложения. Поддержка обоих режимов увеличивает API, поэтому она должна соответствовать реальным сценариям design system.
 
-Риск этих паттернов - неявность. Если child-компонент работает только внутри `Root`, нужно явно бросать ошибку или документировать контракт. Если custom child используется через `asChild`, он должен принимать `ref`, event handlers и accessibility props, иначе поведение сломается.
+**Композиция DOM.** API наподобие Radix `asChild` позволяет primitive передать поведение пользовательскому элементу вместо создания собственного DOM-узла. В React 18 такой компонент должен передать полученные props и `ref` реальному DOM-элементу; иначе потеряются обработчики, ARIA-атрибуты или управление focus.
+
+**Граница ответственности.** Headless primitive не гарантирует доступность итоговой композиции независимо от consumer. Приложение всё ещё обязано добавить видимый focus, читаемый label, достаточный контраст и корректно использовать части. Свобода переставлять элементы ограничена структурным контрактом виджета.
 
 #### Где применяется во frontend
 
-| Ситуация в проекте | Что нужно контролировать | Паттерн |
+| Компонент | Что связывают compound parts | Что обычно закрывает headless-слой |
 | --- | --- | --- |
-| Design system Tabs должен поддерживать разную верстку | порядок и markup частей меняется от экрана | compound components |
-| Dialog должен быть доступным, но выглядеть по-разному в продуктах | focus/ARIA/keyboard общие, стили разные | headless component |
-| Select должен интегрироваться с формой и кастомным trigger | поведение сложное, внешний вид проектный | headless Select + adapter/Controller |
-| Accordion состоит из связанных item/header/panel | части разделены, но state общий | compound components + context |
-| Vue-компонент списка отдаёт родителю render item | данные внутри child, markup у parent | scoped slots |
-| Radix `asChild` используется с design-system Button | нужно сохранить поведение Radix и стиль проекта | child-компонент должен forwardRef/props |
+| Tabs | list, triggers и panels | выбор, focus, keyboard navigation, ARIA-связи |
+| Dialog | trigger, overlay, content, title | portal, focus, Escape, возврат focus |
+| Select/Combobox | trigger, input, list и options | навигация, selection, focus и роли |
+| Accordion | items, headers и panels | open state и keyboard interaction |
+| Form field | label, control, description и error | id-связи и состояние invalid |
 
-> [!faq]+ Уточнения
-> - Compound Components дают гибкость сборки связанных частей.
-> - Headless UI отделяет behavior/accessibility от визуального слоя.
-> - Context часто связывает части compound-компонента.
-> - В Vue аналогичную гибкость часто дают slots/scoped slots.
-> - `asChild` требует, чтобы кастомный компонент принимал props и ref.
-> - Эти паттерны нужны для сложных UI, а не для каждой маленькой кнопки.
+В Vue похожую управляемую композицию дают slots и scoped slots, а переиспользуемое поведение можно вынести в composable. Это не точная копия React Context API, но решается та же задача разделения поведения и представления.
 
 #### Пример
 
-Упрощённая идея compound tabs:
+Radix Tabs уже реализует compound API и headless-поведение; проект добавляет только структуру и стили:
 
 ```tsx
-const TabsContext = createContext<{
-  value: string;
-  setValue(value: string): void;
-} | null>(null);
+import * as Tabs from "@radix-ui/react-tabs";
 
-function TabsRoot({ value, onChange, children }: TabsRootProps) {
+function AccountTabs() {
   return (
-    <TabsContext.Provider value={{ value, setValue: onChange }}>
-      {children}
-    </TabsContext.Provider>
-  );
-}
+    <Tabs.Root defaultValue="profile" className="tabs">
+      <Tabs.List aria-label="Настройки аккаунта" className="tabsList">
+        <Tabs.Trigger value="profile" className="tabsTrigger">
+          Профиль
+        </Tabs.Trigger>
+        <Tabs.Trigger value="security" className="tabsTrigger">
+          Безопасность
+        </Tabs.Trigger>
+      </Tabs.List>
 
-function TabsTrigger({ value, children }: TabsTriggerProps) {
-  const tabs = useContext(TabsContext);
-  if (!tabs) throw new Error("TabsTrigger must be used inside TabsRoot");
-
-  return (
-    <button
-      aria-selected={tabs.value === value}
-      onClick={() => tabs.setValue(value)}
-    >
-      {children}
-    </button>
+      <Tabs.Content value="profile">Настройки профиля</Tabs.Content>
+      <Tabs.Content value="security">Настройки безопасности</Tabs.Content>
+    </Tabs.Root>
   );
 }
 ```
 
-Пользователь собирает UI сам:
+Части можно расположить и оформить в рамках API primitive, а общее значение и keyboard interaction остаются согласованными. Для синхронизации с URL вместо `defaultValue` используют controlled props `value` и `onValueChange`.
 
-```tsx
-<TabsRoot value={tab} onChange={setTab}>
-  <TabsTrigger value="profile">Profile</TabsTrigger>
-  <TabsTrigger value="security">Security</TabsTrigger>
-</TabsRoot>
-```
+#### Ключевые уточнения
 
-#### Частые ошибки
-
-- Делать compound API для простого компонента без реальной гибкости.
-- Не проверять, что child используется внутри нужного `Root`.
-- Прятать accessibility props и ломать keyboard navigation.
-- Использовать `asChild` с компонентом, который не прокидывает `ref` и handlers.
-- Смешивать headless behavior с жёсткими стилями так, что переиспользование теряет смысл.
+- Compound Components описывают форму API, а headless-подход - разделение поведения и визуального слоя. Один компонент может использовать оба решения.
+- Context является частой реализацией связи частей, но не определением паттерна; связь можно построить и другими способами.
+- Headless не означает «без DOM» или «автоматически доступно при любой композиции». Consumer обязан соблюдать контракт primitive и добавить доступные стили.
+- `asChild` и slot composition требуют корректно передавать props, handlers и `ref`; иначе внешний вид сохранится, а поведение сломается.
+- Гибкий API имеет цену в виде дополнительных частей и правил. Для простого компонента явные props могут быть понятнее.
 
 #### Связанные темы
 
@@ -122,7 +110,8 @@ function TabsTrigger({ value, children }: TabsTriggerProps) {
 
 #### Источники
 
-- [React docs: Passing JSX as children](https://react.dev/learn/passing-props-to-a-component#passing-jsx-as-children)
-- [React docs: useContext](https://react.dev/reference/react/useContext)
+- [React: Passing data deeply with context](https://react.dev/learn/passing-data-deeply-with-context)
 - [Radix Primitives: Introduction](https://www.radix-ui.com/primitives/docs/overview/introduction)
-- [Vue docs: Slots](https://vuejs.org/guide/components/slots.html)
+- [Radix Primitives: Tabs](https://www.radix-ui.com/primitives/docs/components/tabs)
+- [WAI-ARIA APG: Tabs Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/)
+- [Vue: Slots](https://vuejs.org/guide/components/slots.html)

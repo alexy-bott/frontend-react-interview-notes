@@ -5,9 +5,9 @@ aliases:
   - frontend forms
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Форма во frontend - это сценарий сбора, проверки и отправки пользовательских данных. Надёжная форма начинается не с библиотеки, а с нативной HTML-семантики: `<form>`, связанные `label` и controls, корректные `name`, submit по Enter, доступные ошибки и понятная связь с backend-контрактом.
+Форма — это полный пользовательский сценарий: ввод данных, validation, submit, server response, показ ошибок и успешное завершение. Основа задаётся HTML: `<form>`, связанные `label`, корректные `name`, submit button и keyboard behavior. React или form library управляют состоянием и UX, но не заменяют нативную семантику и server-side validation.
 
 В React формы обычно строятся тремя способами: controlled state, uncontrolled DOM state или библиотека вроде React Hook Form, которая использует uncontrolled-подход и точечные подписки ради производительности. Выбор зависит от задачи: простая форма может жить на `FormData`, форма с live-логикой может быть controlled, большая продуктовая форма чаще выигрывает от React Hook Form и schema validation.
 
@@ -32,11 +32,13 @@ user input
 | API layer | DTO, request, server errors |
 | UX | loading, disabled, focus, error summary |
 
-#### Развернутый ответ
+#### Базовая модель
 
 Форма до React уже имеет много поведения из браузера: submit по Enter, фокус, autocomplete, constraint validation, `FormData`, связь `label` и control. Если заменить это набором `div` и `onClick`, приложение теряет доступность, предсказуемое поведение и часть встроенного UX.
 
 Базовые требования: `label` связан с полем, у отправляемого поля есть `name`, submit проходит через `<form onSubmit>`, кнопки внутри формы имеют явный `type`, ошибки связаны с полями через доступное описание. Placeholder не заменяет label, потому что исчезает при вводе и не является стабильным доступным именем.
+
+#### Развернутый ответ
 
 Для ошибок важна не только визуальная подсветка. Поле помечают `aria-invalid`, текст ошибки связывают через `aria-describedby`, а после неуспешного submit фокус переводят на первое проблемное поле или error summary. Тогда форма остаётся понятной для клавиатуры и screen reader.
 
@@ -44,14 +46,9 @@ user input
 
 Validation делится по ответственности. Client-side validation даёт быстрый UX-feedback, но server-side validation остаётся обязательной для безопасности, прав, уникальности и бизнес-правил. После server response ошибки маппят на конкретные поля или общий form-level error.
 
-Production-ready форма учитывает pending state, защиту от двойного submit, нормализацию payload, обработку backend field errors, reset или navigation после успеха, фокус на первом проблемном поле и тесты ключевых сценариев.
+Payload не равен внутреннему form state автоматически. `FormData` содержит строки и `File`, допускает несколько значений с одним `name`, не включает disabled controls и отражает только successful controls. Перед API request данные нормализуют в DTO: числа/boolean приводят к нужным типам, повторяющиеся values сохраняют через `getAll`, пустые optional fields преобразуют по server contract.
 
-> [!faq]+ Уточнения
-> - `label`, `name`, `<form onSubmit>` и `button type` важны до выбора React-библиотеки.
-> - Placeholder не заменяет label.
-> - `FormData` подходит для submit-only данных и файлов.
-> - Client validation помогает UX, backend validation защищает данные.
-> - Server errors нужно возвращать в поля или общий error summary.
+Production-ready форма учитывает pending state, повторный submit и idempotency операции, обработку backend field errors, reset/navigation после успеха, сохранение введённых значений при failure, focus management и тесты ключевых сценариев. Простого `disabled` недостаточно для критичной mutation: server также должен корректно обрабатывать повторный request.
 
 #### Пример
 
@@ -61,7 +58,10 @@ function LoginForm() {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-    const payload = Object.fromEntries(formData);
+    const payload = {
+      email: String(formData.get("email") ?? ""),
+      password: String(formData.get("password") ?? ""),
+    };
 
     console.log(payload);
   }
@@ -80,14 +80,14 @@ function LoginForm() {
 }
 ```
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Делать форму из `div` и `onClick`, теряя нативный submit.
-- Забывать `name`, из-за чего поле не попадает в `FormData`.
-- Использовать placeholder вместо label.
-- Делать все поля controlled без необходимости и получать лишние ререндеры.
-- Полагаться только на клиентскую валидацию.
-- Показывать ошибку визуально, но не связывать её с конкретным полем.
+- Native form обеспечивает submit, Enter, autocomplete и участие controls в `FormData`; библиотека должна сохранять эти guarantees.
+- `label` создаёт accessible name, placeholder показывает подсказку и не заменяет label.
+- Client validation ускоряет feedback, server validation защищает data integrity и права доступа.
+- Field error связывают с control, form-level error показывают отдельно; после failure введённые данные не должны исчезать без причины.
+- `FormData` не является typed DTO: значения нужно явно прочитать и нормализовать.
+- Защита от повторной критичной mutation реализуется и в UI, и на server через подходящий idempotency/contract.
 
 #### Связанные темы
 

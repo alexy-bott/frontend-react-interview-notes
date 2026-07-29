@@ -7,9 +7,9 @@ aliases:
   - static dynamic rendering Next.js
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-В Next.js 14 rendering точнее описывать не только через SSR/SSG, а через static rendering, dynamic rendering, ISR и streaming. Static rendering создаёт результат заранее или в фоне после revalidation и хорошо кешируется/CDN. Dynamic rendering выполняется на request time, когда route зависит от cookies, headers, search params, `no-store` данных или другой request-time информации. ISR позволяет отдавать статический результат и обновлять его по времени или событию. Streaming разбивает server render на chunks и отправляет готовые части UI раньше, чем завершится весь route.
+В Next.js 14 route может быть statically rendered и сохранён в Full Route Cache либо dynamically rendered для каждого request. ISR — это обновление static result по времени или событию без полной пересборки приложения. Streaming — способ отправлять HTML/RSC chunks по мере готовности Suspense boundaries; он не является отдельным источником данных или режимом cache.
 
 SSR в разговорной формулировке обычно означает “HTML создаётся на сервере”, но в Next.js 14 важно уточнять модель: страница может быть полностью static, dynamic per request, static с revalidation или streamed через Suspense. После server render клиентские части всё равно проходят hydration.
 
@@ -17,23 +17,25 @@ SSR в разговорной формулировке обычно означа
 
 | Модель | Когда рендерится | Когда подходит |
 | --- | --- | --- |
-| Static rendering | build time или после revalidation | публичные страницы, каталоги, блог, документация |
+| Static rendering | build time или при заполнении/обновлении Full Route Cache | публичные страницы, каталоги, блог, документация |
 | Dynamic rendering | на каждый request | auth, cookies, user-specific данные, request-time logic |
 | ISR | static + обновление по TTL/tag/path | данные меняются, но не требуют fresh response на каждый request |
 | Streaming | chunks по мере готовности | медленные части UI, большие страницы, Suspense |
 | CSR внутри Next | в Client Components после hydration | highly interactive widgets, browser-only state |
 
+#### Базовая модель
+
+Static rendering в App Router возможен, когда результат не зависит от конкретного incoming request. Next.js сохраняет HTML и RSC Payload в Full Route Cache и переиспользует их между пользователями. Static здесь означает cacheable route output, а не «данные никогда не изменяются»: result может обновляться через revalidation или новый deploy.
+
+Dynamic rendering выполняет route на каждый request, потому что результат зависит от cookies, headers, search params, uncached data либо явного `dynamic = "force-dynamic"`. Dynamic route не хранится в Full Route Cache, но отдельные `fetch(..., { cache: "force-cache" })` всё ещё могут использовать Data Cache. Это позволяет сочетать personalized shell с общими cached data.
+
 #### Развернутый ответ
 
-Static rendering в App Router включается, когда route не зависит от request-time данных и может быть безопасно закеширован. Результат можно переиспользовать между пользователями и отдавать быстро. В Next.js 14 static route может обновляться через `revalidate`, `revalidatePath` или `revalidateTag`, поэтому static не обязательно означает “навсегда неизменяемый”.
+ISR — lifecycle statically rendered route. При time-based revalidation истечение interval само по себе не запускает timer-job: следующий request может получить stale result и инициировать regeneration; после успешного render cache заменяется. Если regeneration завершилась ошибкой, Next.js продолжает отдавать последнюю успешную версию и повторяет попытку позже. On-demand revalidation очищает entries по path/tag после мутации или webhook.
 
-Dynamic rendering включается, когда Next.js видит зависимость от конкретного запроса: `cookies()`, `headers()`, `searchParams`, uncached data request, `cache: "no-store"`, `revalidate: 0` или route segment config вроде `dynamic = "force-dynamic"`. Такой route рендерится на request time, потому что результат может отличаться для разных пользователей или запросов.
+Streaming решает ожидание «всё или ничего» внутри одного server render. `loading.tsx` создаёт Suspense boundary для route segment, а явный `<Suspense>` отделяет конкретную медленную часть. Server отправляет shell/fallback раньше и продолжает stream готовых chunks. Польза зависит от boundary: если вся page скрыта одним fallback или медленная операция выполняется до boundary, раннего meaningful content не получится.
 
-ISR - компромисс между SSG и SSR. Пользователь получает закешированную страницу, а обновление происходит по времени или по событию. Time-based revalidation задаётся через `next: { revalidate: seconds }` у `fetch` или `export const revalidate = seconds` для segment. On-demand revalidation делается через `revalidatePath` или `revalidateTag`, обычно после мутации в Server Action или Route Handler.
-
-Streaming решает проблему “всё или ничего”. Без streaming сервер ждёт все данные и только потом отдаёт HTML. С `loading.tsx` и Suspense можно отправить shell и готовые участки сразу, а медленные части догрузить позже. Это улучшает perceived performance, но требует аккуратных boundaries: fallback должен быть meaningful, а не ломать layout.
-
-SSR/SSG/ISR не отменяют hydration. Server Components могут не отправлять свой JS в клиент, но Client Components должны загрузиться и гидратироваться. Поэтому performance зависит от cache strategy, streaming boundaries, размера client bundle и количества интерактивных islands.
+Термины SSG и SSR пришли из Pages Router и остаются полезными: SSG близок к static rendering, SSR — к dynamic request rendering. Но App Router точнее разделяет время server render, caching route output и streaming. Все модели могут содержать Client Components: Server Components не требуют своего client JS, а Client Components должны загрузиться и гидратироваться.
 
 #### Где применяется во frontend
 
@@ -45,13 +47,6 @@ SSR/SSG/ISR не отменяют hydration. Server Components могут не �
 | Dashboard с медленными виджетами | streaming + Suspense boundaries |
 | Product catalog | static/ISR + dynamic filters при необходимости |
 | Browser-only editor | Client Component внутри server-rendered shell |
-
-> [!faq]+ Уточнения
-> - `cookies()` и `headers()` в Server Component переводят route в dynamic rendering.
-> - `fetch(..., { cache: "no-store" })` делает данные request-time и влияет на rendering route.
-> - `revalidate` задаёт TTL для кеша, но не делает данные персональными.
-> - Streaming работает через route segments, `loading.tsx` и React Suspense.
-> - Static export отличается от static rendering: export создаёт набор файлов для static hosting и не поддерживает server-only features.
 
 #### Пример
 
@@ -100,13 +95,15 @@ export default function Page() {
 }
 ```
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Называть весь Next.js server render просто SSR и терять различия static/dynamic/ISR.
-- Использовать cookies/headers в route, который должен оставаться static.
-- Ожидать, что ISR мгновенно обновит все копии без продуманной invalidation.
-- Ставить Suspense boundary слишком высоко и скрывать весь экран fallback-ом.
-- Забывать, что Client Components после server render требуют hydration.
+- Static/dynamic описывает переиспользование route output; cached/uncached отдельно описывает каждый data request.
+- Dynamic route способен читать cached shared data, хотя его HTML/RSC Payload создаются для каждого request.
+- `revalidate` задаёт допустимую stale duration и обновление по обращению, а не cron с гарантированным моментом запуска.
+- ISR не подходит для строго свежих персональных данных: cached output может временно быть stale и переиспользуется между users.
+- Streaming определяет порядок доставки частей render, но не делает медленный backend быстрее.
+- Suspense boundary ставят вокруг независимой медленной части, сохраняя стабильный layout и meaningful fallback.
+- Static export — отдельный deployment mode без server runtime; он не равен обычному static rendering внутри работающего Next.js server.
 
 #### Связанные темы
 

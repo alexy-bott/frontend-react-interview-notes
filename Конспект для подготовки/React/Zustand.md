@@ -46,16 +46,6 @@ Actions обычно лежат рядом с состоянием в store. `se
 
 Для TypeScript часто пишут `create<Store>()(...)`, чтобы корректно типизировать state и actions. В Next.js module-level singleton подходит только для общего client-only state. Если store создаётся или заполняется на сервере данными запроса, нужен новый store на каждый request и одинаковый initial snapshot для server render и hydration; иначе возможны утечка данных между пользователями и mismatch.
 
-> [!faq]+ Уточнения
-> - Zustand проще Redux Toolkit, но Redux строже для сложных доменных workflows и больших команд.
-> - Context подходит для редко меняющихся зависимостей, Zustand удобнее для часто меняющегося global client state.
-> - Selector выбирает минимальный slice store; подписка на весь store создаёт лишние обновления.
-> - По умолчанию selector result сравнивается через `Object.is`; для объекта из нескольких полей используют `useShallow` или отдельные selectors.
-> - Actions обычно лежат в store рядом с состоянием, но API/cache слой держат отдельно.
-> - `persist` применяют к безопасным preferences, а не к tokens, большим данным или server cache.
-> - В Next.js/RSC store должен быть client-side boundary, а не shared singleton для данных конкретного пользователя на сервере.
-> - `set` делает shallow merge только верхнего уровня; replace-режим может удалить actions.
-
 #### Пример
 
 ```ts

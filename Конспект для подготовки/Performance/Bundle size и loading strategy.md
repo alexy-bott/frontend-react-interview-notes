@@ -7,61 +7,65 @@ aliases:
   - dependency cost
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Bundle size важен не только как “сколько килобайт скачали”. JavaScript нужно скачать, распаковать, распарсить, скомпилировать и выполнить на main thread. Поэтому два файла с одинаковым gzip-size могут иметь разную runtime-стоимость на слабом устройстве. Главный фокус - initial JS и critical path: сколько кода нужно до первого полезного экрана и первого взаимодействия.
+Bundle - результат обхода графа модулей сборщиком: JavaScript, CSS и связанные assets объединяются или разделяются на chunks, которые браузер загружает для запуска приложения. Важен не только переданный размер: JavaScript нужно распаковать, разобрать, скомпилировать и выполнить на main thread.
 
-Loading strategy строится вокруг разделения кода: общий entry должен содержать только то, что нужно сразу; редкие routes, heavy widgets, charts, editors, admin-функции и модалки можно грузить через dynamic import. Tree shaking помогает убрать неиспользуемые exports, но зависит от ESM, side effects, формата пакета и импортов.
-
-Оптимизация bundle - это trade-off. Слишком большой initial bundle ухудшает старт, но слишком много мелких chunks создаёт waterfall и задержки переходов. Поэтому анализируют bundle analyzer, Network waterfall, Coverage, route-level chunks, cache headers и реальные метрики.
+Loading strategy определяет, какой код нужен при первом открытии, какой можно загрузить для route или feature позже и какие chunks стоит заранее подготовить. Цель - уменьшить критический путь без появления длинного waterfall из мелких файлов. Решение проверяют через bundle analyzer, Network, Coverage, CPU trace и пользовательские метрики, а не по общему числу килобайт.
 
 #### Ключевая схема
 
 ```text
-dependency graph
-  -> initial chunk
-  -> route/feature chunks
-  -> cache strategy
-  -> network + parse + execute cost
+entry points + imports
+-> module graph
+-> tree shaking и transforms
+-> initial chunks + async chunks
+-> content hashes и cache headers
+-> download + parse + execute
 ```
 
-| Приём | Когда полезен | Риск |
+| Механизм | Что меняет | Основной компромисс |
 | --- | --- | --- |
-| Route-level splitting | разные страницы имеют разный код | delayed navigation |
-| Component lazy loading | тяжёлый редкий widget | spinner/waterfall |
-| Tree shaking | ESM + side-effect-safe packages | не сработает с CommonJS/side effects |
-| Dependency replacement | тяжёлая библиотека ради малой функции | миграционная стоимость |
-| Long-term caching | hashed assets | нужен правильный cache policy |
-| Prefetch/preload | прогнозируемый следующий ресурс | можно забить сеть |
+| Code splitting | переносит часть кода в отдельный chunk | дополнительный запрос при использовании |
+| Tree shaking | исключает статически неиспользуемые exports | зависит от формата модулей и side effects |
+| Long-term caching | повторно использует неизменившийся hashed asset | HTML должен своевременно ссылаться на новую версию |
+| Preload/prefetch | начинает загрузку до обычного обнаружения или использования | конкуренция за сеть и бесполезный трафик |
+| Замена зависимости | снижает transfer и CPU cost | стоимость миграции и возможная потеря возможностей |
+
+#### Базовая модель
+
+**Initial chunk** содержит код, необходимый для запуска текущей страницы. **Async chunk** создаётся на границе динамического `import()` и загружается при достижении этой ветки либо раньше по отдельной подсказке. Code splitting обычно не уменьшает весь код приложения; он меняет момент, когда пользователь оплачивает его загрузку и выполнение.
+
+**Tree shaking** - исключение неиспользуемого кода на основе статической структуры ES modules. Сборщик должен видеть imports/exports и понимать, можно ли удалить модуль без потери побочного эффекта. Dynamic property access, CommonJS и неверно объявленные package side effects могут ограничить анализ.
+
+**Content hash** в имени asset меняется вместе с содержимым. Такой файл можно кешировать надолго как immutable. HTML и manifest кешируют осторожнее, потому что они содержат ссылки на актуальные hashed chunks.
 
 #### Развернутый ответ
 
-Initial JS должен быть ограничен тем, что нужно для первого экрана и базовой интерактивности. Если в общий entry попадает chart library, rich text editor, admin-only SDK или огромный date library, пользователь платит эту цену всегда, даже если не открывает соответствующую фичу.
+**Критический путь.** Сначала измеряют код, необходимый для первого полезного экрана и раннего взаимодействия. Rich text editor, charting SDK или admin feature не должны автоматически попадать в общий entry, если большинство пользователей не использует их в этом сценарии.
 
-Dynamic import создаёт отдельный chunk. Это хорошо для routes, feature flags, редких модалок, сложных графиков и больших редакторов. Но lazy loading должен быть спроектирован: fallback, preload по намерению пользователя, кеширование chunks и отсутствие длинной цепочки “загрузить компонент -> он загрузил ещё три chunks”.
+**Граница splitting.** Route-level splitting даёт крупные предсказуемые chunks. Component-level splitting полезен для тяжёлого редкого виджета, но может создать последовательность: route chunk загружен, после render обнаружен widget chunk, затем его data request. Такой waterfall исправляют переносом границы, параллельной загрузкой данных и кода или предварительной загрузкой по обоснованному пользовательскому намерению.
 
-Tree shaking работает лучше с ESM, потому что сборщик может статически понять imports/exports. Он может не удалить код, если пакет CommonJS, импортируется namespace, есть top-level side effects или `sideEffects` в package описан некорректно. Поэтому иногда важнее выбрать библиотеку с хорошим ESM build, чем надеяться на magic.
+**Стоимость dependency.** Анализируют не только package целиком, но и конкретный import, дублирование версий, локали, polyfills и код, который действительно вошёл в chunk. Маленький transfer после Brotli может всё равно означать дорогой parse/execute. Замена библиотеки оправдана измеримым вкладом, а не её репутацией.
 
-Cache strategy важна для production. Hashed JS/CSS/assets можно кешировать долго, потому что изменение контента меняет имя файла. `index.html` обычно кешируют осторожнее, чтобы пользователь получил новую версию приложения и ссылки на актуальные chunks.
+**Cache и deploy.** После релиза открытая вкладка может содержать старый HTML/runtime и запросить lazy chunk, уже удалённый с CDN. Надёжная схема использует atomic deployment, хранит старые hashed assets дольше максимальной жизни клиента и обрабатывает ошибку загрузки chunk контролируемым предложением обновить приложение. Простое бесконечное auto-reload может создать цикл.
 
-#### Где применяется во frontend
+**Budget.** CI может ограничивать initial JS, отдельный chunk или изменение размера относительно main. Budget останавливает известную регрессию до merge, но не заменяет runtime-проверку: он не видит задержку backend, layout и конкретные пользовательские данные.
 
-| Ситуация | Что проверить | Решение |
+#### Диагностика
+
+| Симптом | Проверка | Возможное решение |
 | --- | --- | --- |
-| Первая загрузка тяжёлая | initial chunks + Coverage | вынести редкий код из entry |
-| Route открывается медленно | waterfall chunks | preload/prefetch или укрупнить chunk |
-| Библиотека добавила 300 KB | bundle analyzer | заменить импорт/библиотеку |
-| Tree shaking не работает | формат пакета и side effects | ESM import, точечные imports |
-| После deploy 404 на chunks | cache/version mismatch | atomic deploy, корректные cache headers |
-
-> [!faq]+ Уточнения
-> - Gzip/Brotli size не показывает parse/execute cost.
-> - Code splitting не уменьшает общий код, а переносит часть загрузки на более поздний момент.
-> - Lazy loading без продуманного UX может ухудшить perceived performance.
-> - Tree shaking не гарантирован для CommonJS и side-effect-heavy пакетов.
-> - Long-term caching требует content hash и аккуратного cache policy для HTML.
+| Медленный первый экран | состав initial chunks и Coverage | вынести редкую feature из entry |
+| Route ждёт цепочку chunks | Network initiator waterfall | изменить границу splitting или загрузить зависимости параллельно |
+| Tree shaking не удаляет модуль | output analyzer, ESM/CJS, `sideEffects` | исправить import или metadata пакета |
+| Один package встречается несколько раз | версии и dependency graph | выровнять версии или deduplicate |
+| После deploy возникает chunk 404 | версия HTML и наличие старого asset | atomic deploy и retention hashed assets |
+| Transfer небольшой, CPU высокий | Performance trace на слабом CPU | сократить выполняемый код, а не только сжатый размер |
 
 #### Пример
+
+В React 18 `lazy` использует динамический import для компонента, который не нужен на основном route:
 
 ```tsx
 const AdminEditor = lazy(() => import("./AdminEditor"));
@@ -75,15 +79,15 @@ function AdminPage() {
 }
 ```
 
-Такой splitting полезен, если editor не нужен большинству пользователей на первом экране.
+Сборщик может создать отдельный chunk для `AdminEditor`. Это улучшает initial route только при условии, что редактор действительно не нужен сразу; задержка его открытия и fallback становятся частью нового UX-компромисса.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Смотреть только общий bundle size, а не initial route cost.
-- Ленивая загрузка компонента, который нужен сразу на первом экране.
-- Делить код на десятки мелких chunks без проверки waterfall.
-- Импортировать всю библиотеку ради одной функции.
-- Держать старый `index.html`, который ссылается на удалённые chunks.
+- Общий bundle size не равен стоимости первого route. Сначала анализируют initial chunks и критический путь.
+- Code splitting переносит работу на более поздний момент; он не удаляет код и способен ухудшить первое открытие lazy feature.
+- Tree shaking опирается на статический анализ и корректно описанные side effects, а не удаляет любой неисполненный код автоматически.
+- Сжатый размер не отражает parse и execute cost, поэтому Network дополняют CPU trace.
+- Long-term cache безопасен для content-hashed assets, но старые clients требуют согласованной deploy-стратегии и сохранения прежних chunks.
 
 #### Связанные темы
 
@@ -99,5 +103,6 @@ function AdminPage() {
 #### Источники
 
 - [web.dev: Reduce JavaScript payloads with code splitting](https://web.dev/articles/reduce-javascript-payloads-with-code-splitting)
-- [Webpack: Code splitting](https://webpack.js.org/guides/code-splitting/)
-- [Vite: Build options](https://vite.dev/config/build-options.html)
+- [webpack: Code Splitting](https://webpack.js.org/guides/code-splitting/)
+- [webpack: Tree Shaking](https://webpack.js.org/guides/tree-shaking/)
+- [Vite: Build Options](https://vite.dev/config/build-options.html)

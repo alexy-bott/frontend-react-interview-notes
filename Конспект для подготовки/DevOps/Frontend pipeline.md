@@ -6,109 +6,121 @@ aliases:
   - deploy frontend
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Frontend pipeline - это цепочка автоматических проверок и доставки: установка зависимостей, lint, typecheck, tests, production build, анализ артефактов, сборка Docker image и deploy. Его задача - не просто “запустить npm scripts”, а сделать поставку воспроизводимой: один и тот же commit проходит понятные gates и превращается в конкретный artifact или image tag.
+Frontend pipeline превращает commit в проверяемый и воспроизводимый release. Обычно он устанавливает dependencies по lockfile, параллельно запускает lint, typecheck и tests, создаёт production build, публикует versioned artifact или image, разворачивает его, выполняет smoke checks и связывает ошибки/метрики с release ID.
 
-Pipeline разделяет fast feedback и delivery. В merge request нужны быстрые проверки качества. На default branch можно собирать image и деплоить staging. Production deploy обычно привязывают к protected branch/tag, manual approval или release process. Для rollback нужен версионированный artifact/image, а не только `latest`.
+Главный delivery-инвариант — **build once, promote**: staging и production получают тот же проверенный artifact, а не независимо собранные похожие версии. Если окружениям нужны разные публичные URLs или flags, их передают runtime config отдельно от immutable application artifact. Rollback возвращает известную предыдущую версию, но требует совместимости с текущим API и данными.
 
 #### Ключевая схема
 
 ```text
-merge request
--> install
--> lint
--> typecheck
--> test
--> build
-
-main/tag
--> build Docker image
--> push registry
--> deploy staging/prod
--> monitor
+source + lockfile
+-> quality gates
+-> production build
+-> versioned artifact/image + release metadata
+-> staging deploy
+-> smoke/integration checks
+-> production rollout
+-> monitoring
+-> rollback or forward fix
 ```
 
-| Этап | Что проверяет |
+| Этап | Проверяемый результат |
 | --- | --- |
-| install | lockfile и воспроизводимость зависимостей |
-| lint | стиль и базовые ошибки |
-| typecheck | TypeScript-контракты |
-| test | unit/integration проверки, например Jest/RTL |
-| build | production bundle компилируется |
-| package | Docker image или static artifact |
-| deploy | доставка в окружение |
-| monitor | smoke tests, metrics, error tracking |
+| Install | lockfile совместим с runtime/package manager |
+| Lint/typecheck/test | код проходит принятые contracts |
+| Build | production bundle создаётся без dev-only допущений |
+| Package | artifact неизменяем и связан с commit SHA |
+| Deploy | окружение запустило именно этот release |
+| Verify | routes, assets, API и критичный сценарий доступны |
+| Observe | errors, metrics и source maps связаны с release |
+
+#### Базовая модель
+
+Quality gate — обязательная проверка, которая блокирует merge или delivery при нарушении согласованного условия. Набор зависит от риска: lint и typecheck дают быстрый feedback, unit/integration tests проверяют поведение, production build ловит ошибки bundler/config, E2E проверяет целый сценарий в работающем окружении.
+
+Artifact — идентифицируемый результат build: архив `dist`, package, container image или deployment bundle. Его маркируют commit SHA/release version и по возможности проверяют digest. Если deploy повторно запускает build, измениться могут dependencies, base image, environment values и время генерации — production получит уже не то, что прошло проверки.
+
+Static SPA часто содержит environment-specific values прямо в bundle. Тогда staging build и production build являются **разными artifacts**, даже если source commit одинаков. Чтобы действительно promote один artifact, публичную конфигурацию выносят в runtime file/endpoint. Server-side secrets при этом остаются вне браузера.
 
 #### Развернутый ответ
 
-Quality gate - набор проверок, без которых merge или deploy не проходит. Для frontend это обычно lint, typecheck, unit/integration tests и production build. E2E можно запускать на staging, nightly или по изменению критичных зон, если они тяжёлые.
+**Feedback path.** Независимые быстрые jobs выполняют параллельно. Тяжёлые E2E, visual regression и performance checks запускают там, где их сигнал оправдывает время: на staging, для critical paths, nightly либо по изменившимся областям. Это приоритизация, а не отказ от проверки.
 
-Staging проверяет artifact/image в окружении, похожем на production. Production deploy должен использовать тот же artifact/image, который уже прошёл проверки. Если на deploy заново пересобирать код с другим набором env, исчезает связь между проверенной версией и тем, что реально попало пользователям.
+**Packaging.** Pipeline сохраняет artifact, release manifest, commit SHA и при необходимости SBOM/provenance. Container image получает immutable tag или digest; static release публикуют в versioned directory. `latest` можно оставить удобным указателем, но не единственным идентификатором.
 
-Smoke tests после deploy проверяют минимальную жизнеспособность: HTML отдаётся, assets загружаются, API health доступен, главный route открывается, login или ключевой сценарий не сломан. Smoke не заменяет E2E, но быстро ловит проблемы доставки, конфигурации и static serving.
+**Deploy.** Static files загружают atomically: новый `index.html` не должен ссылаться на chunks, которых ещё нет. Старые content-hashed chunks некоторое время сохраняют, потому что открытые вкладки могут запросить их после deploy. Для SSR дополнительно проверяют startup/readiness и совместимость server/client assets.
 
-Rollback работает проще, когда каждый deploy связан с versioned image tag или release artifact. Commit SHA/release tag позволяют понять, какая версия запущена, и вернуть предыдущую. `latest` без версии затрудняет диагностику и откат.
+**Verification.** Smoke checks подтверждают delivery: HTML имеет ожидаемый release ID, assets возвращают JavaScript/CSS с корректным MIME, API доступен, критичный route открывается. Они не заменяют подробные tests, а ловят wiring/config/cache failures сразу после deploy.
 
-Frontend pipeline может включать performance budget: bundle size, bundle analyzer report, Lighthouse CI, synthetic Web Vitals checks. Это ловит деградации до релиза, а не после жалоб пользователей.
+**Observability.** Ошибки, logs и metrics помечают release/commit. Source maps либо публикуют осознанно, либо загружают в error tracker и не раздают публично. Без release metadata массовую ошибку трудно связать с конкретным rollout.
 
-Для Vite запускают именно `vite build`, а не dev server. Для Webpack запускают production build с release env/mode, проверяют hashed assets, sourcemaps policy, bundle size и то, что `devServer.proxy` не воспринимается как production routing.
-
-> [!faq]+ Уточнения
-> - Quality gate обычно включает lint, typecheck, tests и production build.
-> - Production должен деплоить уже проверенный artifact/image.
-> - Smoke tests проверяют доставку и грубую работоспособность после deploy.
-> - Rollback требует versioned artifact/image tag.
-> - Pipeline может проверять bundle size и performance budget.
+**Rollback.** Возврат frontend artifact помогает, только если предыдущая версия совместима с текущими API, database schema, feature flags и runtime config. Для несовместимых изменений применяют backward-compatible rollout, feature flag или forward fix. Canary/blue-green уменьшают blast radius, но требуют routing и наблюдаемости.
 
 #### Пример
 
 ```yaml
-stages:
-  - quality
-  - build
-  - package
-  - deploy
+stages: [quality, build, deploy]
 
-build_image:
-  stage: package
-  image: docker:27
-  services:
-    - docker:27-dind
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_TAG
-  variables:
-    IMAGE_TAG: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+quality:
+  stage: quality
   script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
-    - docker build -t "$IMAGE_TAG" .
-    - docker push "$IMAGE_TAG"
+    - npm ci
+    - npm run lint
+    - npm run typecheck
+    - npm test -- --ci
+
+build_release:
+  stage: build
+  needs: [quality]
+  script:
+    - npm ci
+    - npm run build
+    - printf '%s' "$CI_COMMIT_SHA" > dist/release.txt
+  artifacts:
+    paths: [dist/]
+    expire_in: 30 days
 
 deploy_staging:
   stage: deploy
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  needs:
+    - job: build_release
+      artifacts: true
+  environment: staging
   script:
-    - echo "Deploy $CI_COMMIT_SHA to staging"
+    - ./deploy-static.sh dist staging
+    - ./smoke-test.sh "$STAGING_URL" "$CI_COMMIT_SHA"
+
+deploy_production:
+  stage: deploy
+  needs:
+    - job: build_release
+      artifacts: true
+  environment: production
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
+  script:
+    - ./deploy-static.sh dist production
+    - ./smoke-test.sh "$PRODUCTION_URL" "$CI_COMMIT_SHA"
 ```
 
-В реальном проекте deploy-команды зависят от инфраструктуры: Kubernetes, Helm, Docker Compose, SSH, GitOps, cloud platform или hosting provider.
+Пример показывает transfer одного `dist` в оба deploy jobs. Конкретные scripts зависят от инфраструктуры. Если `deploy-static.sh` подменяет JavaScript внутри `dist`, инвариант уже нарушен; допустимо отдельно публиковать environment-specific **public** runtime config.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Пересобирать production artifact во время deploy другим набором env.
-- Не запускать production build в merge request.
-- Деплоить из feature branches с production secrets.
-- Не иметь rollback strategy.
-- Не связывать release с commit SHA.
-- Не проверять, что Docker image стартует после сборки.
-- Игнорировать bundle size и performance regressions.
+- Pipeline подтверждает не только качество source code, но и путь конкретного release до окружения.
+- Production build является самостоятельным quality gate даже при успешных tests.
+- Один commit не гарантирует одинаковый output двух независимых builds.
+- Runtime config позволяет promote одну SPA-сборку, но доставленные браузеру значения остаются публичными.
+- Smoke checks проверяют wiring и доступность после deploy, а не заменяют unit/integration/E2E tests.
+- Rollback требует versioned artifact и совместимости предыдущего frontend с текущими contracts.
+- Performance/security checks должны иметь измеримый threshold и понятное действие при failure.
 
 #### Связанные темы
 
 - [[Конспект для подготовки/Tooling/package.json и lock-файлы]]
-- [[Конспект для подготовки/Tooling/npm yarn pnpm и package managers]]
 - [[Конспект для подготовки/Tooling/Воспроизводимые версии в команде]]
 - [[Конспект для подготовки/Tooling/Bundle analysis и size budgets]]
 - [[Конспект для подготовки/DevOps/GitLab CI CD]]
@@ -117,14 +129,11 @@ deploy_staging:
 - [[Конспект для подготовки/DevOps/Nginx и static serving]]
 - [[Конспект для подготовки/Architecture/Error handling и observability]]
 - [[Конспект для подготовки/Testing/E2E testing]]
-- [[Конспект для подготовки/Testing/Jest]]
 - [[Конспект для подготовки/Web Basics/Core Web Vitals]]
-- [[Конспект для подготовки/Tooling/Vite]]
-- [[Конспект для подготовки/Tooling/Webpack]]
-- [[Конспект для подготовки/Tooling/Build config и production сборка]]
 
 #### Источники
 
-- [GitLab Docs: CI/CD YAML syntax reference](https://docs.gitlab.com/ci/yaml/)
-- [GitLab Docs: Use Docker to build Docker images](https://docs.gitlab.com/ci/docker/using_docker_build/)
+- [GitLab Docs: CI/CD](https://docs.gitlab.com/ci/)
+- [GitLab Docs: Job artifacts](https://docs.gitlab.com/ci/jobs/job_artifacts/)
+- [GitLab Docs: Deployment safety](https://docs.gitlab.com/ci/environments/deployment_safety/)
 - [Docker Docs: Multi-stage builds](https://docs.docker.com/build/building/multi-stage/)

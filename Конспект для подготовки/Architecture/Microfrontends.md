@@ -5,70 +5,87 @@ aliases:
   - микрофронтенды
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Microfrontends - это подход, где frontend-продукт делится на автономные части, которые могут разрабатывать и релизить разные команды. Идея похожа на microservices, но в UI: отдельные домены или vertical slices поставляются независимо и собираются в общий shell.
+Microfrontends разделяют frontend-продукт на vertical slices, которыми независимо владеют команды и которые собираются в единый пользовательский интерфейс. Основная задача - организационная автономия: команда изменяет, тестирует и выпускает свой business domain с минимальной координацией общего релиза.
 
-Главная польза microfrontends не в технологии, а в организационной независимости. Они имеют смысл, когда продукт большой, команды автономны, релизные циклы конфликтуют, а границы доменов достаточно стабильны. Цена тоже высокая: сложнее routing, shared dependencies, дизайн-система, auth, observability, performance, SSR/hydration и согласованность UX.
+Независимость оплачивается runtime и governance-сложностью: routing, versioned contracts, auth context, design system, accessibility, shared dependencies, telemetry, loading failures и performance budgets. Если одна команда и общий pipeline способны развивать модульный монолит, microfrontends обычно не решают дополнительной проблемы.
 
 #### Ключевая схема
 
-| Подход | Смысл |
-| --- | --- |
-| Build-time composition | части собираются вместе во время build |
-| Runtime composition | shell подключает remote-приложения в runtime |
-| Route-based split | разные маршруты принадлежат разным командам |
-| Component-level split | remote-компоненты внутри одной страницы |
-| Shared design system | общий UI-язык и контракты |
+```text
+stable business boundaries + team ownership
+-> integration contract
+-> independent build/deploy
+-> shell/runtime composition
+-> shared UX and platform policies
+-> end-to-end observability and fallback
+```
+
+| Способ композиции | Автономия | Основной компромисс |
+| --- | --- | --- |
+| Route-level | высокая, простой ownership URL | переходы и shared shell нужно согласовать |
+| Runtime modules / Module Federation | независимый deploy внутри SPA | version skew, remote loading и shared scope |
+| Build-time packages | простой runtime и type checking | consumer rebuild связывает releases |
+| Web Components | framework-neutral element contract | state/SSR/forms/style integration остаются |
+| iframe | сильная runtime/style isolation | communication, navigation и accessibility сложнее |
+
+#### Базовая модель
+
+Граница проходит по business capability, а не по техническому элементу. Команда checkout владеет UI, data access, tests и release checkout; отдельная команда «кнопок» не создаёт самостоятельный user value и вынуждена координироваться со всеми.
+
+Shell обычно владеет bootstrap, top-level routing, session context, navigation, global error handling и подключением remotes. Remote экспортирует versioned entry contract и не обращается к внутренностям соседа. Общие действия проходят через URL, typed events или platform services с явной семантикой.
+
+Independent repository или build ещё не гарантирует независимый release. Если любое изменение remote требует синхронно обновить shell и другие remotes, система остаётся распределённым монолитом с более дорогой сборкой.
 
 #### Развернутый ответ
 
-Microfrontends оправданы, когда проблема находится в масштабе команд и релизной независимости, а не просто в размере bundle. Если одна команда может поддерживать модульный монолит, microfrontends часто добавляют лишнюю сложность: несколько сборок, shared dependencies, routing, auth, monitoring, performance budget и единый UX.
+**Границы команд.** Microfrontend оправдан устойчивым domain ownership, разными release cadences и возможностью команды самостоятельно поддерживать production. Нестабильные границы приводят к частому переносу кода и cross-remote calls.
 
-Реализация зависит от степени независимости и изоляции. Module Federation и runtime composition дают независимые релизы remote-приложений. Build-time packages проще для контроля версий, но релизятся вместе с shell. Iframe даёт сильную изоляцию, но усложняет UX, коммуникацию и доступность. Web Components подходят для отдельных виджетов, но не снимают вопросы state, auth и design system.
+**Contracts и version skew.** Shell и remote могут работать в версиях, выпущенных в разные дни. Contract эволюционирует backward-compatible: optional capabilities, version negotiation или coordinated deprecation. TypeScript в одном build не проверяет remote, загруженный позже, поэтому runtime boundary всё равно валидируется.
 
-Общие зависимости должны иметь явный контракт. React, router, design system, telemetry SDK и shared utils нельзя бесконтрольно дублировать в каждом remote: это увеличивает bundle, может сломать hooks/context и создаёт разные визуальные паттерны. Shell часто отвечает за bootstrap, routing, auth context, feature flags и общие провайдеры.
+**Shared dependencies.** Module Federation может делить React, router и design system через shared scope, но singleton/version settings требуют согласованности. Две копии React способны нарушить assumptions hooks/context; принудительный singleton с несовместимой версией тоже ломает remote. Dependency policy тестируют как часть integration contract.
 
-Авторизация не должна держаться только на UI. Shell может передавать remote-приложениям user/session context, но backend всё равно проверяет права. Remote UI, который скрыл кнопку, не защищает API от прямого вызова.
+**State.** Один global mutable store для всех remotes создаёт сильную связанность схемы и release. Shell передаёт минимальный session/platform context, server state получает каждый domain через API/cache, а cross-domain event содержит business fact, не внутренний reducer action.
 
-Performance - один из главных рисков: много independent chunks, поздняя загрузка remote entry, waterfall-запросы, дублирование зависимостей, разные CSS-стратегии, SSR/hydration complexity и сложность preloading. Поэтому microfrontends требуют budget, мониторинг и договорённости между командами.
+**Failure isolation.** Remote entry или chunk может не загрузиться независимо от shell. Нужны timeout, Error Boundary, fallback, retry и telemetry с remote name/version. Предыдущая совместимая версия или route-level недоступность часто безопаснее падения всего приложения.
 
-> [!faq]+ Уточнения
-> - Microfrontends решают организационный масштаб и независимые релизы, а не просто “большое приложение”.
-> - Module Federation, single-spa, iframe, web components и build-time packages дают разные компромиссы.
-> - Shared dependencies должны быть согласованы, особенно React, router и design system.
-> - Shell часто отвечает за bootstrap, routing, auth context и общие провайдеры.
-> - Performance budget обязателен из-за remote entries, дублирования и waterfall.
+**UX и accessibility.** Design system задаёт tokens и primitives, но не гарантирует одинаковый сценарий. Команды согласуют navigation, focus transfer, overlays, localization и error language. E2E проверяет переходы через boundaries.
+
+**Performance.** Каждая автономная сборка способна добавить framework, SDK и CSS. Общий budget считают на user route, включая shell и remotes, а waterfall проверяют на cold cache и слабом device. Независимый deploy не освобождает от общего Core Web Vitals результата.
 
 #### Пример выбора
 
-```text
-Один продукт, одна команда, общий релиз -> модульный монолит
-Несколько доменов, разные команды, независимые релизы -> microfrontends возможны
-Нужна сильная изоляция внешнего виджета -> iframe или web component
-Нужен общий shell с route-level ownership -> runtime composition
-```
+| Контекст | Предпочтительный старт | Причина |
+| --- | --- | --- |
+| Одна команда, один release | модульный монолит | меньше operational overhead |
+| Несколько domain-команд, routes независимы | route-level composition | ясные boundaries и failure isolation |
+| Remote component нужен внутри общей page | runtime composition | независимый deploy ценой сложного contract |
+| Внешний недоверенный widget | iframe | сильнее изоляция origin/runtime |
+| Общая библиотека обновляется синхронно | build-time package | независимый runtime не требуется |
 
-#### Частые ошибки
+Решение принимают после описания ownership, release requirement, failure model и performance budget. Сам размер codebase не является достаточным критерием.
 
-- Выбирать microfrontends только потому, что приложение стало большим.
-- Не иметь стабильных доменных границ между командами.
-- Дублировать React, design system и общие SDK в каждом remote.
-- Забывать про единый monitoring, error boundary и correlation id.
-- Делать независимый UI без общих accessibility и design-system правил.
-- Не считать стоимость SSR, hydration и performance.
+#### Ключевые уточнения
+
+- Microfrontends оптимизируют автономию команд и releases, а не автоматически скорость страницы или качество modules.
+- Runtime composition требует backward-compatible contract, потому что host и remote живут в разных версиях.
+- Shared singleton уменьшает duplication только при совместимых версиях и корректной initialization; это не бесплатная настройка.
+- Общий store и deep imports превращают remotes в распределённый монолит.
+- Failure, accessibility и performance оцениваются для целого user journey, даже если ownership разделён.
 
 #### Связанные темы
 
 - [[Конспект для подготовки/Architecture/Frontend architecture]]
 - [[Конспект для подготовки/Architecture/Error handling и observability]]
+- [[Конспект для подготовки/Architecture/API слой и контракты]]
 - [[Конспект для подготовки/Web Basics/Bundlers и code splitting]]
-- [[Конспект для подготовки/React/SSR и SSG]]
+- [[Конспект для подготовки/Performance/Bundle size и loading strategy]]
 - [[Конспект для подготовки/React/Hydration]]
 
 #### Источники
 
+- [Martin Fowler: Micro Frontends](https://martinfowler.com/articles/micro-frontends.html)
+- [webpack: Module Federation](https://webpack.js.org/concepts/module-federation/)
+- [single-spa: Recommended Setup](https://single-spa.js.org/docs/recommended-setup/)
 - [micro-frontends.org](https://micro-frontends.org/)
-- [Webpack: Module Federation](https://webpack.js.org/concepts/module-federation/)
-- [single-spa documentation](https://single-spa.js.org/docs/getting-started-overview/)
-- [web.dev: Core Web Vitals](https://web.dev/articles/vitals)

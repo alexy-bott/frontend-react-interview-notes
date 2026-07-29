@@ -7,11 +7,11 @@ aliases:
   - npm install
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
 `package.json` - это manifest frontend-проекта. В нём описывают имя проекта, scripts, зависимости, ограничения по Node/package manager, настройки публикации и иногда конфиги инструментов. Для приложения самые важные поля: `scripts`, `dependencies`, `devDependencies`, `peerDependencies`, `engines`, `type`, `private`, `packageManager`, иногда `exports` и `workspaces`.
 
-Lock-файл (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) фиксирует конкретное дерево установленных зависимостей: точные версии, resolved URLs, integrity hashes и транзитивные зависимости. Его коммитят, чтобы локальная установка, CI и production build получали одинаковое дерево пакетов.
+Lock-файл (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) фиксирует результат dependency resolution: точные versions, transitive graph и данные проверки/получения packages. Его коммитят и устанавливают тем же package manager, чтобы команда и CI не выбирали заново допустимые versions при каждом install.
 
 `npm install` может обновить lock-файл, если `package.json` и lock расходятся. `npm ci` предназначен для чистой воспроизводимой установки в CI: он ставит зависимости строго по lock-файлу и падает, если lock не соответствует `package.json`.
 
@@ -24,7 +24,7 @@ Lock-файл (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) фиксир�
 | `dependencies` | пакеты, нужные приложению в runtime/bundle |
 | `devDependencies` | инструменты разработки: TS, linters, test runners, bundlers |
 | `peerDependencies` | требование к пакету, который должен предоставить consumer |
-| `engines` | ожидаемые версии Node/npm |
+| `engines` | заявленный диапазон совместимости Node/package manager |
 | `packageManager` | фиксирует npm/yarn/pnpm и версию package manager |
 | `type` | режим `.js` файлов: ESM или CommonJS |
 | `exports` | публичные entrypoints пакета |
@@ -32,16 +32,22 @@ Lock-файл (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) фиксир�
 | lock-файл | точное dependency tree для команды и CI |
 | `node_modules` | установленный результат, обычно не коммитится |
 
+#### Базовая модель
+
+`package.json` задаёт **constraints и intent**, lock-файл — выбранный resolution, package manager — алгоритм/materialization, а `node_modules`/PnP map — локальный install result. Один lock не выравнивает Node, OS/CPU, package-manager version и environment-sensitive install scripts, поэтому воспроизводимость требует согласовать весь toolchain.
+
 #### Развернутый ответ
 
 **`package.json` отвечает на вопрос “что это за проект и как с ним работать”.**
 Frontend-разработчик обычно смотрит туда первым: какие есть scripts, какой package manager используется, какие версии React/Next/Vite/Jest стоят, какие зависимости runtime, а какие нужны только для разработки.
 
-**`dependencies` и `devDependencies` различаются по смыслу, а не по месту в bundle.**
-`dependencies` - это библиотеки, которые нужны приложению или пакету как часть работы: React, state manager, date library, UI kit. `devDependencies` - инструменты для разработки и сборки: TypeScript, ESLint, Prettier, Jest/Vitest, Vite/Webpack plugins. Но bundler может включить пакет в клиентский bundle, если код импортирует его из runtime-кода, даже если пакет случайно лежит в `devDependencies`.
+**`dependencies` и `devDependencies` описывают install/deploy intent, а не bundle boundary.**
+Для публикуемой library runtime imports относятся в `dependencies`/`peerDependencies`, build/test tools — в `devDependencies`. Static frontend build обычно устанавливает devDependencies на build stage, а runtime image может содержать только готовые assets. Если client source импортирует package, bundler способен включить его независимо от раздела manifest.
 
 **`peerDependencies` важны для библиотек и UI-kit пакетов.**
-Если библиотека работает с React, она часто объявляет React как peer dependency. Это означает: “я совместима с React такой версии, но React должен быть установлен в проекте-потребителе”. Так избегают ситуации, когда в приложении случайно появляются две копии React.
+Если library работает с React, она часто объявляет React как peer dependency: library выражает совместимый range и ожидает единый экземпляр в consumer graph. Современный package manager может автоматически установить peer, но compatibility/duplicate-instance problem от этого не исчезает.
+
+`engines` сообщает supported runtime range и может выдать warning; строгое enforcement зависит от package manager/config. Для команды version дополнительно фиксируют version file, `packageManager`, CI/Docker image.
 
 **Lock-файл фиксирует не только прямые зависимости.**
 В `package.json` может быть `"react": "^19.0.0"`, но реальная установка включает много транзитивных пакетов. Lock-файл записывает конкретное дерево, чтобы завтра npm не собрал чуть другое окружение из-за обновившейся транзитивной зависимости.
@@ -52,7 +58,7 @@ Frontend-разработчик обычно смотрит туда первы�
 **Удалять lock-файл без причины опасно.**
 После удаления lock npm пересоберёт dependency tree заново. Даже если версии в `package.json` выглядят теми же, транзитивные зависимости могут измениться, и проект получит другой результат. Lock обновляют осознанно: при добавлении/удалении пакета, обновлении зависимостей, смене package manager или исправлении конфликтов.
 
-#### Где применяется во frontend
+#### Практическое применение
 
 | Ситуация | Что проверять |
 | --- | --- |
@@ -63,14 +69,6 @@ Frontend-разработчик обычно смотрит туда первы�
 | UI-kit или shared package | корректны ли `peerDependencies` |
 | Docker build | используется ли `npm ci`/аналог и копируется ли lock |
 | Обновление зависимостей | понятен ли diff lock-файла |
-
-#### Если уточнили
-
-> - **Нужно ли коммитить lock-файл?** Для приложений - да. Он нужен для воспроизводимых установок у команды, в CI и при сборке Docker image.
-> - **Почему не коммитят `node_modules`?** Это тяжёлый сгенерированный результат установки, зависящий от платформы, package manager и lock-файла. В репозитории хранят manifest и lock, а зависимости устанавливают заново.
-> - **Можно ли иметь сразу `package-lock.json` и `yarn.lock`?** Обычно нет. Один проект должен использовать один package manager и один lock-файл, иначе команда и CI могут ставить разные деревья зависимостей.
-> - **Что делает `"private": true`?** Защищает проект от случайной публикации в npm registry.
-> - **Зачем `"type": "module"`?** Поле влияет на то, как Node интерпретирует `.js` файлы: как ES modules или CommonJS.
 
 #### Пример
 
@@ -90,8 +88,8 @@ Frontend-разработчик обычно смотрит туда первы�
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.0",
@@ -104,15 +102,15 @@ Frontend-разработчик обычно смотрит туда первы�
 
 Этот manifest говорит: проект приватный, использует ESM, ожидает конкретный package manager, имеет стандартные scripts и разделяет runtime-зависимости от инструментов разработки.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Удалять lock-файл, чтобы “починить установку”, не понимая последствия.
-- Смешивать npm/yarn/pnpm lock-файлы в одном проекте.
-- Использовать `npm install` в CI вместо `npm ci`, когда нужен строгий reproducible install.
-- Класть runtime dependency в `devDependencies` и считать, что bundler её не включит.
-- Забывать про `peerDependencies` в shared packages и UI-kit.
-- Не фиксировать package manager в `packageManager`.
-- Игнорировать diff lock-файла в merge request.
+- Application lock-файл коммитят; library также часто коммитит lock для собственного CI, но published consumers решают graph своим lock.
+- `npm ci` проверяет согласованность manifest/lock и делает clean install; это не гарантирует одинаковый native result при разном OS/Node.
+- Integrity hash подтверждает соответствие скачанного archive lock-записи, но не доказывает безопасность package.
+- `dependencies`/`devDependencies` влияют на install semantics, а imports/tree shaking — на client bundle.
+- `peerDependencies` выражает compatibility и shared-instance expectation; warning требует анализа, а не слепого `--legacy-peer-deps`.
+- `engines` без enforcement является constraint/documentation, не полноценным version switcher.
+- Lock conflict разрешают package manager и проверяют diff, а не удаляют файл по умолчанию.
 
 #### Связанные темы
 

@@ -139,17 +139,6 @@ Partial Pre-rendering позволяет заранее отрендерить �
 
 React Compiler не привязывают как обычную runtime-фичу React 18/19. Это build-time инструмент, который автоматически мемоизирует компоненты и значения при соблюдении правил React. По официальной документации основной сценарий для него - React 19, при этом React 17 и 18 поддерживаются через дополнительную настройку. Поэтому его относят к современному React tooling, а не к хукам конкретной версии.
 
-> [!faq]+ Уточнения
-> - React 18 отличается от React 17 concurrent-основой: interruptible rendering, transitions, расширенный batching и streaming SSR.
-> - React 19 отличается от React 18 прикладными API: Actions, формы, optimistic UI, Server Components, Server Actions, metadata и более точная SSR/hydration диагностика.
-> - React 19.2 важен для `<Activity>`, `useEffectEvent`, `cacheSignal`, Performance Tracks, Partial Pre-rendering и SSR-изменений.
-> - React Compiler относится к build-time tooling: он не является runtime API вроде `useTransition` или `useEffectEvent`.
-> - Actions и Server Actions не одно и то же: Actions - общий подход к async mutations, Server Actions - framework-сценарий выполнения функции на сервере.
-> - `useTransition` не debounce: debounce задерживает по времени, transition меняет приоритет React-обновления.
-> - Новые API React 19 внедряют точечно: Actions для форм, `useOptimistic` для optimistic UI, `ref` prop для новых компонентов, RSC через framework.
-> - Для RSC-пакетов важны patch-релизы безопасности; feature-набор всё равно объясняют как React 19/19.2.
-> - Для перехода на React 19 официально рекомендуют сначала `react@18.3`, затем обновление React/ReactDOM, новый JSX Transform, codemods и проверку breaking changes.
-
 #### Пример
 
 React 18: срочное обновление input и несрочное обновление результатов.

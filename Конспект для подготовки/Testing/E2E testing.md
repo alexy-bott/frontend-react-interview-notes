@@ -7,9 +7,9 @@ aliases:
   - browser tests
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-E2E testing проверяет полный пользовательский сценарий в браузере: открыть приложение, выполнить действия, пройти routing, отправить запросы, увидеть результат. В отличие от unit и integration тестов, E2E даёт уверенность, что frontend, browser APIs, routing, network, storage и backend-контракт работают вместе. Цена этой уверенности - скорость, инфраструктура и риск flaky.
+E2E test запускает приложение в real browser и проверяет ценный пользовательский flow через UI, routing, storage, network и test backend. Он даёт наиболее широкую уверенность, но только для реально подключённых boundaries: если endpoint перехвачен через `page.route`, frontend branch проверен, а интеграция с этим backend endpoint — нет.
 
 Для E2E выбирают небольшое число критичных flows: login, checkout, создание сущности, изменение прав, восстановление после ошибки, основной happy path продукта. Проверки маленьких состояний компонентов дешевле держать в integration-тестах. Стабильный E2E использует locators по role/text/test id, контролируемые test data, изолированное состояние и понятную очистку.
 
@@ -32,9 +32,13 @@ real browser
 | smoke после деплоя | внутренний state |
 | payment/order/login flow | мелкий CSS-класс |
 
-#### Развернутый ответ
+#### Базовая модель
 
 E2E проверяет приложение в наиболее близком к пользователю окружении: браузер, routing, storage, network, cookies, permissions и backend-контракт. Поэтому он даёт высокую уверенность, но стоит дороже. Стратегия E2E должна быть узкой: smoke, критичные business flows, auth/permissions, checkout/order, создание и сохранение ключевых сущностей.
+
+Playwright создаёт отдельный BrowserContext для каждого test, изолируя cookies/storage на browser side. Database, queues, mailboxes и external services этим не изолируются: test data получают unique IDs/tenant/user и очищают через API/fixtures.
+
+#### Развернутый ответ
 
 Locators выбирают по пользовательскому смыслу: role, accessible name, label, text. `data-testid` полезен для технически сложных мест, где пользовательский селектор нестабилен или отсутствует, но он не должен заменять семантику везде.
 
@@ -44,12 +48,7 @@ Network можно проверять через тестовый backend или
 
 Flaky в E2E часто появляется из-за `sleep`, гонок, общего состояния, анимаций, нестабильной сети и неочищенных данных. Тест ждёт конкретное состояние: visible heading, enabled button, URL, response, toast, исчезновение loader. Trace/video/screenshot помогают быстро понять, где путь сломался.
 
-> [!faq]+ Уточнения
-> - E2E покрывает критичные пользовательские flows, а не каждую ветку компонента.
-> - Locators строят вокруг role, accessible name, label и text.
-> - Test data должны быть изолированы и подготовлены самим тестом или seed-ом.
-> - Реальный backend полезен для smoke, network routing - для редких ошибок и edge cases.
-> - `waitForTimeout` заменяют ожиданием конкретного UI/network состояния.
+Playwright locators выполняют actionability checks, а web-first assertions retry-ят до ожидаемого состояния. Это не означает, что любой timeout нужно увеличить: ожидание должно выражать конкретный user-visible contract. Trace обычно сохраняют на first retry в CI, чтобы получить диагностику без стоимости trace для каждого успешного test.
 
 #### Пример Playwright
 
@@ -67,14 +66,14 @@ test("user can log in", async ({ page }) => {
 });
 ```
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Покрывать E2E слишком много мелких случаев.
-- Использовать `waitForTimeout` вместо ожидания конкретного UI-состояния.
-- Делать тесты зависимыми от порядка выполнения.
-- Использовать нестабильные selectors.
-- Не сохранять trace/video/screenshot для диагностики падений.
-- Тестировать production-like flow без контроля данных и окружения.
+- E2E подтверждает только boundaries, которые действительно участвуют в run; network interception сужает его до browser/frontend scenario.
+- Locator по role/name или явному test id является стабильным contract; CSS/XPath по структуре DOM обычно нет.
+- Auto-waiting проверяет actionability, web-first assertion — ожидаемый result; fixed sleep не нужен.
+- BrowserContext изолирует browser state, но shared backend data требует отдельной стратегии.
+- Test сам создаёт preconditions через fixture/API и не зависит от порядка других tests.
+- Trace на first retry, screenshot/video/logs сохраняют контекст failure; retries не заменяют устранение причины.
 
 #### Связанные темы
 

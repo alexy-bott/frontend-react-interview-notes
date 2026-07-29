@@ -6,66 +6,66 @@ aliases:
   - frontend auth architecture
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Auth flow во frontend проектируется как набор состояний и переходов: unknown session, unauthenticated, authenticated, refreshing, forbidden, logout. Нужно решить, как приложение узнаёт текущего пользователя, как отправляет authenticated requests, что делает при `401/403`, как обновляет access token, как защищает маршруты и как чистит cache/state при logout.
+Auth flow во frontend - это жизненный цикл пользовательской сессии: вход, определение текущего пользователя после открытия приложения, добавление учётных данных к запросам, обновление сессии, проверка доступа и выход. Его удобно описывать явными состояниями: `unknown`, `unauthenticated`, `authenticated`, `refreshing` и `forbidden`.
 
-Protected routes не должны быть только “если нет user, redirect”. На старте приложения session может быть неизвестна, refresh может идти в фоне, пользователь может быть authenticated, но без нужной роли. Поэтому нужны loading gate, redirect policy, access denied UI, role/permission checks и единый API-layer для refresh.
-
-Главная идея: auth - это не только login form. Это API boundary, security model, route access, cache cleanup, UX состояний и тестирование edge cases.
+Protected route использует это состояние, чтобы выбрать интерфейс: дождаться проверки сессии, показать страницу входа, разрешить экран или показать отказ в доступе. Такая проверка улучшает навигацию, но не является защитой данных: backend обязан отдельно аутентифицировать пользователя и авторизовать каждый запрос.
 
 #### Ключевая схема
 
 ```text
-app start
+открытие приложения
 -> session unknown
--> load/refresh session
+-> проверка сессии или refresh
 -> authenticated | unauthenticated
--> protected route check
--> allowed | forbidden | redirect
+-> проверка permission для маршрута
+-> экран | access denied | переход на login
 ```
 
-| Состояние | UI/поведение |
+```text
+защищённый API-запрос
+-> success
+   или 401 по причине истёкшей сессии
+      -> один refresh
+      -> один повтор запроса | logout
+   или 403
+      -> отказ в действии без refresh
+```
+
+| Понятие | Что означает |
 | --- | --- |
-| unknown | splash/skeleton, запрос current user/refresh |
-| unauthenticated | login page, redirect target |
-| authenticated | app shell, user cache, allowed routes |
-| refreshing | shared refresh promise, requests wait |
-| forbidden | access denied, no refresh |
-| logout | clear token, user, query cache, session |
+| Аутентификация (authentication) | установление личности пользователя |
+| Авторизация (authorization) | проверка права известного пользователя на ресурс или действие |
+| Access token | короткоживущие учётные данные для API-запроса |
+| Refresh token или session cookie | средство продления или подтверждения сессии по правилам backend |
+| Protected route | клиентская развилка навигации на основе состояния сессии и permissions |
+
+#### Базовая модель
+
+После reload JavaScript-состояние создаётся заново. Даже если в браузере сохранилась cookie или другой признак сессии, приложение ещё не знает текущего пользователя и его permissions. Поэтому `unknown` - отдельное состояние: до ответа `/me`, session loader или refresh endpoint нельзя считать пользователя ни вошедшим, ни вышедшим.
+
+Если сессия подтверждена, приложение получает минимальные данные текущего пользователя и permissions. Protected route проверяет требование экрана. Неаутентифицированного пользователя отправляют на login с сохранением исходного URL, а аутентифицированному без нужного permission показывают `access denied`.
+
+Способ хранения учётных данных зависит от серверной архитектуры. `HttpOnly` cookie недоступна JavaScript и снижает риск прямого чтения токена при XSS, но браузер отправляет её автоматически, поэтому нужно правильно настроить `SameSite`, `Secure`, CORS и защиту от CSRF. Access token в памяти приложения не переживает reload; хранение токена в `localStorage` переживает reload, но делает его доступным JavaScript при XSS. Единого безопасного выбора без учёта backend и модели угроз нет.
 
 #### Развернутый ответ
 
-Auth начинается с источника истины. Приложение должно понять, есть ли пользователь: через `/me`, session endpoint, refresh endpoint или framework loader. Пока ответ неизвестен, нельзя уверенно показывать ни protected content, ни login redirect, иначе будет flicker или неправильный переход.
+**Обработка `401`.** Не каждый `401` нужно автоматически превращать в refresh. API-клиент запускает refresh только для запросов и причин, предусмотренных протоколом сессии, не делает refresh для login/refresh endpoint и ограничивает повтор исходного запроса одним разом. Иначе возникает бесконечный цикл.
 
-`401` и `403` имеют разный смысл. `401` может означать истёкший access token и запуск refresh flow. `403` означает, что пользователь известен, но действие запрещено; refresh здесь не поможет. UI должен показать access denied или скрыть действие заранее по permissions.
+**Один refresh для нескольких запросов.** Если access token истёк одновременно у нескольких запросов, первый создаёт refresh promise, а остальные ожидают его результат. После успеха запросы повторяются с новыми учётными данными. После неуспеха выполняется единый logout flow. Такой подход называют single-flight: одна общая операция обслуживает несколько одинаковых попыток.
 
-Protected route проверяет не только факт login, но и роль/permission. Например, route `/admin` требует `admin:read`. Если пользователь не authenticated - redirect на login. Если authenticated, но без права - forbidden page. Если session unknown - loading gate.
+**Различие `401` и `403`.** `401 Unauthorized` сообщает, что запрос не имеет действительных учётных данных. `403 Forbidden` означает, что сервер понял запрос, но отказывается его выполнять. Для обычной схемы refresh может помочь при истёкшей сессии и `401`, но не добавит отсутствующее право при `403`.
 
-Refresh flow должен быть централизован в API layer. При пачке `401` нельзя запускать несколько refresh-запросов одновременно; нужен shared promise/queue. После успешного refresh исходные запросы повторяются один раз. После неуспеха приложение делает logout flow.
+**Protected routes и permissions.** Скрытие кнопки по permission предотвращает заведомо недоступное действие и делает UI понятнее. Оно не мешает вручную отправить HTTP-запрос, поэтому сервер проверяет то же право независимо. Роли удобно преобразовать в permissions на границе auth-модели, чтобы компоненты спрашивали о конкретном действии, например `orders:update`, а не воспроизводили правила ролей.
 
-Logout должен очищать не только token. Нужно очистить user state, query cache с приватными данными, selected workspace, realtime connections, feature flags context и закрыть сессию на сервере. Иначе следующий пользователь на том же устройстве может увидеть старые данные из cache.
+**Logout.** Клиент прекращает новые защищённые запросы, закрывает WebSocket и другие приватные подписки, очищает пользователя и приватный query cache и переводит UI в `unauthenticated`. Если сервер поддерживает отзыв refresh token или завершение session, ему отправляют logout-запрос. Для нескольких вкладок состояние выхода можно синхронизировать через `BroadcastChannel` или событие `storage`.
 
-#### Где применяется во frontend
-
-| Ситуация в проекте | Что проектируется | Конкретное решение |
-| --- | --- | --- |
-| Пользователь открывает protected URL после reload | session ещё неизвестна | route-level auth gate с состоянием `unknown` |
-| Access token истёк у пяти запросов одновременно | возможен refresh storm | один shared refresh promise, остальные запросы ждут |
-| Пользователь authenticated, но без роли admin | это не login problem | показать `403/access denied`, не делать refresh |
-| Logout из одной вкладки | приватные данные могут остаться в cache | clear query cache/store + cross-tab logout event |
-| После login нужно вернуть пользователя назад | redirect target должен сохраниться | хранить intended URL в location state/query |
-| WebSocket открыт под старой сессией | соединение пережило logout | закрыть socket/realtime subscriptions при logout |
-
-> [!faq]+ Уточнения
-> - `unknown session` - отдельное состояние, не равное logout.
-> - `401` и `403` обрабатываются по-разному.
-> - Protected route должен учитывать permissions/roles.
-> - Refresh централизуют в API client, а не в компонентах.
-> - Logout очищает token, user state, query cache и realtime connections.
-> - Cookie-based auth требует CSRF/CORS/cookie attributes.
+**Сбои и восстановление.** Временная ошибка проверки сессии не всегда равна отсутствию сессии. Если `/me` не отвечает из-за сети, приложение должно отличать retryable error от подтверждённого `401`; иначе оно может удалить локальное состояние и отправить пользователя на login из-за краткого сетевого сбоя.
 
 #### Пример
+
+Компонент маршрута принимает решение только после завершения начальной проверки:
 
 ```tsx
 function ProtectedRoute({
@@ -76,13 +76,14 @@ function ProtectedRoute({
   children: React.ReactNode;
 }) {
   const auth = useAuth();
+  const location = useLocation();
 
   if (auth.status === "unknown" || auth.status === "refreshing") {
     return <PageSkeleton />;
   }
 
   if (auth.status === "unauthenticated") {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   if (permission && !auth.permissions.has(permission)) {
@@ -93,14 +94,15 @@ function ProtectedRoute({
 }
 ```
 
-#### Частые ошибки
+Этот компонент управляет только отображением и переходом. Проверка `permission` должна повторяться на сервере для запроса, который читает или изменяет защищённый ресурс.
 
-- Считать отсутствие user до загрузки session logout-состоянием.
-- Делать refresh на `403`.
-- Реализовывать refresh отдельно в каждом запросе/компоненте.
-- Не чистить query cache при logout.
-- Показывать protected content на мгновение до проверки session.
-- Хранить long-lived secret в `localStorage` без оценки XSS-рисков.
+#### Ключевые уточнения
+
+- Состояние `unknown` означает «проверка ещё не завершена», а не «пользователь вышел». Это предотвращает преждевременный redirect и мигание защищённого экрана.
+- Refresh является частью централизованного API-клиента или auth layer. Компоненты не должны независимо повторять эту логику.
+- `401` не является безусловной командой на refresh, а `403` обычно требует объяснить отсутствие доступа, а не обновлять токен.
+- Protected route защищает пользовательский сценарий, а не данные. Реальная граница авторизации находится на backend.
+- Logout завершает всю клиентскую сессию: очищает приватные данные и прекращает соединения, а не только удаляет один token.
 
 #### Связанные темы
 
@@ -115,6 +117,7 @@ function ProtectedRoute({
 
 #### Источники
 
+- [MDN: HTTP authentication](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Authentication)
 - [MDN: Set-Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie)
 - [OWASP: Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
-- [OWASP: Cross Site Request Forgery Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
+- [OWASP: Cross-Site Request Forgery Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)

@@ -6,54 +6,70 @@ aliases:
   - CI CD frontend
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-GitLab CI/CD автоматизирует проверку и доставку изменений: install, lint, typecheck, test, build, docker image, deploy. Pipeline описывается в `.gitlab-ci.yml`. Внутри есть stages, jobs, scripts, rules, variables, cache, artifacts и runners. Stage задаёт порядок крупных этапов, job выполняет конкретную работу, runner запускает job на машине или в контейнере.
+GitLab CI/CD запускает автоматические проверки и delivery по событиям repository. Конфигурация `.gitlab-ci.yml` описывает, когда создать pipeline, какие jobs в него включить, в какой среде их выполнить и какие результаты передать дальше. Runner получает job и запускает её commands, например в изолированном Docker container.
 
-Для frontend pipeline должен быстро ловить ошибки до deploy: поставить зависимости по lockfile, проверить формат/линт, прогнать TypeScript, unit-тесты, собрать production bundle, сохранить build artifacts или собрать Docker image, а затем деплоить только из нужных веток/tags. Рабочий pipeline не просто “зелёный”, а воспроизводимый, быстрый и безопасный.
+Для frontend merge request обычно проходит dependency install по lockfile, lint, typecheck, tests и production build. Delivery использует конкретный artifact или image, а production credentials выдаются только доверенному deploy job. `workflow: rules` управляет созданием pipeline, job-level `rules` — присутствием job, `needs` — её реальными зависимостями и ранним запуском.
 
 #### Ключевая схема
 
-| GitLab CI/CD сущность | Роль |
+```text
+push / merge request / tag / schedule
+-> workflow: rules     создаёт или отклоняет pipeline
+-> job rules           формируют набор jobs
+-> runner              выполняет scripts в заданной среде
+-> needs / stages      задают зависимости и порядок
+-> artifacts / reports передают и показывают результат
+-> environment         фиксирует deployment
+```
+
+| Сущность | За что отвечает |
 | --- | --- |
-| `.gitlab-ci.yml` | конфигурация pipeline |
-| `stages` | порядок этапов |
-| `job` | конкретная задача |
-| `script` | команды job |
-| `rules` | условия запуска job |
-| `runner` | среда выполнения job |
-| `cache` | ускорение зависимостей |
-| `artifacts` | передача результата между stages |
-| `variables` | конфигурация и секреты |
+| `workflow: rules` | существует ли pipeline для события |
+| `job` + `script` | конкретная единица работы |
+| `rules` | входит ли job в созданный pipeline |
+| `stage` | общий барьер между группами jobs |
+| `needs` | точная DAG-зависимость между jobs |
+| `runner` | execution environment и доступные ресурсы |
+
+#### Базовая модель
+
+Без `needs` stages работают как последовательные барьеры: все успешные jobs текущего stage завершаются до следующего. Jobs внутри stage выполняются параллельно при наличии runners. `needs` создаёт directed acyclic graph (DAG): job запускается сразу после перечисленных dependencies и не ждёт несвязанные jobs предыдущего stage.
+
+`workflow: rules` вычисляется раньше jobs. Поэтому job rule не может вернуть job в pipeline, создание которого запретил workflow. Разделение полезно для типичной проблемы GitLab: один push в branch с открытым merge request может создать одновременно branch и MR pipelines. Workflow должен явно определить, какие pipeline sources допустимы.
+
+Runner является частью trust boundary. Job получает source code, variables и network access, разрешённые проектом. Shared, project и protected runners имеют разный уровень доверия; используемый image тоже входит в supply chain. Поэтому deploy job выполняют на контролируемом runner и не выдают production secrets непроверенному MR-коду.
 
 #### Развернутый ответ
 
-Stage задаёт порядок крупных этапов pipeline: quality, build, package, deploy. Job выполняет конкретную работу внутри stage: `lint`, `typecheck`, `test`, `build_app`. Jobs одного stage обычно могут выполняться параллельно, а следующий stage стартует после успешного завершения предыдущего.
+**CI.** Continuous Integration даёт раннюю обратную связь: lockfile воспроизводится, типы согласованы, tests проходят, production build собирается. Независимые lint/typecheck/test jobs можно выполнять параллельно, чтобы ошибка появилась быстрее.
 
-`rules` управляют тем, когда запускать job: merge request, default branch, tag, schedule, manual deploy. Это отделяет быстрые проверки MR от release/deploy сценариев и не тратит runner time на лишние jobs.
+**CD.** Continuous Delivery подготавливает проверенный release к deploy, а Continuous Deployment автоматически отправляет прошедшее изменение в production. Конкретный процесс команды может оставлять manual approval перед production; это не отменяет автоматизацию сборки, проверок и фиксации release.
 
-Runner выполняет jobs в конкретной среде: shell, Docker executor, Kubernetes executor. Для frontend часто используют Docker executor с Node image, чтобы install/build/test запускались предсказуемо и не зависели от локальной машины runner-а.
+**Rules.** Условия связывают job с pipeline source, branch, tag, изменёнными paths или manual action. Не следует без необходимости смешивать legacy `only/except` и `rules`: у них разные defaults, и конфигурация становится труднее предсказуемой.
 
-MR pipeline обычно является quality gate: install по lockfile, lint, typecheck, unit/integration tests, production build. Deploy запускают из protected branch/tag, с protected variables и понятным правилом approval, чтобы feature branch не получила production credentials.
+**Reproducibility.** Node/package-manager version, lockfile и build command должны быть одинаковыми локально и в CI. Container image tag удобен, но tag может быть обновлён владельцем registry; для строгой воспроизводимости фиксируют точную версию или digest и планируют обновления безопасности.
 
-После успешной сборки можно собрать Docker image и запушить его в GitLab Container Registry. Tags должны включать commit SHA, branch slug или release tag. Это связывает deploy с конкретным commit и делает rollback диагностируемым.
-
-> [!faq]+ Уточнения
-> - Stage задаёт порядок, job выполняет конкретную задачу.
-> - Jobs одного stage могут идти параллельно.
-> - `rules` разделяют MR checks, default branch, tags, schedules и manual deploy.
-> - Runner задаёт среду выполнения job.
-> - Production deploy связывают с protected refs, protected variables и versioned image/artifact.
+**Security.** Protected/masked variables снижают вероятность случайной утечки, но любой job с доступом к secret способен его использовать. Изменения `.gitlab-ci.yml`, included templates и build scripts проходят review как executable code. Deploy permissions, environments и runners ограничивают отдельно от обычных test jobs.
 
 #### Пример
 
 ```yaml
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
 stages:
   - quality
   - build
-  - package
 
 default:
+  # В проекте tag согласуют с поддерживаемой Node version и обновляют явно.
   image: node:22-alpine
   cache:
     key:
@@ -66,38 +82,36 @@ default:
 
 lint:
   stage: quality
-  script:
-    - npm run lint
+  script: npm run lint
 
 typecheck:
   stage: quality
-  script:
-    - npm run typecheck
+  script: npm run typecheck
 
 test:
   stage: quality
-  script:
-    - npm test -- --ci
+  script: npm test -- --ci
 
 build:
   stage: build
-  script:
-    - npm run build
+  needs: [lint, typecheck, test]
+  script: npm run build
   artifacts:
     paths:
       - dist/
     expire_in: 1 week
 ```
 
-#### Частые ошибки
+Workflow запускает MR pipeline, но подавляет дублирующий branch pipeline, когда для branch уже открыт MR. Это один конкретный policy: для tag releases, schedules или parent/child pipelines правила расширяют согласно процессу проекта.
 
-- Не запускать typecheck в CI.
-- Делать deploy из любой ветки.
-- Использовать `npm install` без lockfile-дисциплины.
-- Путать cache и artifacts.
-- Печатать секреты в logs.
-- Не сохранять build output как artifact там, где он нужен следующему stage.
-- Использовать только `latest` tag для Docker image.
+#### Ключевые уточнения
+
+- `workflow: rules` выбирает pipelines, job `rules` — jobs внутри них.
+- Stage задаёт общий порядок, `needs` — фактические зависимости и более ранний старт.
+- Зелёный pipeline полезен только при воспроизводимой среде и meaningful quality gates.
+- Build artifact или image связывают с commit SHA/release tag; один `latest` недостаточен для диагностики и rollback.
+- Runner и CI configuration входят в security boundary, потому что исполняют код и получают variables.
+- Production deploy ограничивают protected environment/ref, доверенным runner и минимальными credentials.
 
 #### Связанные темы
 
@@ -110,6 +124,8 @@ build:
 
 #### Источники
 
-- [GitLab Docs: CI/CD YAML syntax reference](https://docs.gitlab.com/ci/yaml/)
 - [GitLab Docs: Get started with GitLab CI/CD](https://docs.gitlab.com/ci/)
-- [GitLab Docs: Use Docker to build Docker images](https://docs.gitlab.com/ci/docker/using_docker_build/)
+- [GitLab Docs: CI/CD YAML syntax](https://docs.gitlab.com/ci/yaml/)
+- [GitLab Docs: Workflow](https://docs.gitlab.com/ci/yaml/workflow/)
+- [GitLab Docs: Job rules](https://docs.gitlab.com/ci/jobs/job_rules/)
+- [GitLab Docs: needs](https://docs.gitlab.com/ci/yaml/needs/)

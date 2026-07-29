@@ -6,11 +6,11 @@ aliases:
   - HMR
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-Vite - современный frontend build tool и dev server. В dev-режиме он не пересобирает всё приложение как единый bundle при каждом изменении, а использует native ES modules в браузере и отдаёт модули по запросу. Поэтому старт проекта и Hot Module Replacement обычно быстрее, особенно на больших приложениях. Для production Vite выполняет полноценную сборку статических assets, применяет оптимизации, hashing, code splitting и обработку CSS/assets.
+Vite — dev server и production build tool. В development он отдаёт application source как transformed native ESM, переписывает bare imports и предварительно объединяет dependencies, а HMR обновляет затронутую часть module graph. Production command строит оптимизированные HTML/JS/CSS/assets с hashing и code splitting.
 
-На 16 июля 2026 актуальная документация Vite показывает ветку v8.1.5, где production build настраивается через `build.rolldownOptions`. В старых версиях Vite production build обычно объясняли через Rollup. Корректная формулировка: Vite - это dev server и build tool с ESM-first dev experience, plugin API и production build pipeline; конкретный bundler зависит от версии Vite.
+Версионная граница существенна: Vite 8 использует Rolldown/Oxc toolchain и `build.rolldownOptions`; Vite 7 и старее production build обычно опирался на Rollup/esbuild-related options. Стабильная public model остаётся той же, но advanced config переносят только после проверки docs установленной major version.
 
 #### Ключевая схема
 
@@ -18,7 +18,7 @@ Vite - современный frontend build tool и dev server. В dev-режи
 | --- | --- |
 | Dev server | отдаёт ESM-модули, быстро стартует |
 | HMR | обновляет изменённые модули без полной перезагрузки |
-| TS/JSX | трансформирует TypeScript/JSX для dev/build |
+| TS/JSX | трансформирует syntax, но не заменяет полный typecheck |
 | CSS | поддерживает CSS imports, CSS Modules, PostCSS, SCSS/Less при установленном preprocessor |
 | Assets | умеет импортировать картинки, raw/url assets, workers |
 | Env | даёт `import.meta.env`, expose только для `VITE_*` |
@@ -45,7 +45,7 @@ Vite - современный frontend build tool и dev server. В dev-режи
 // vite.config.ts
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
-import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -55,7 +55,7 @@ export default defineConfig(({ mode }) => {
     base: env.APP_BASE_PATH || "/",
     resolve: {
       alias: {
-        "@": path.resolve(__dirname, "src"),
+        "@": fileURLToPath(new URL("./src", import.meta.url)),
       },
     },
     server: {
@@ -87,22 +87,19 @@ export default defineConfig(({ mode }) => {
 | `vite build` проверяет production | dev server не доказывает готовность к deploy |
 | `loadEnv(..., "")` загружает все env | приватные значения легко случайно передать в `define` |
 
+#### Базовая модель
+
+В dev-режиме Vite разделяет source и dependencies. Source modules трансформируются по запросу и отдаются browser как ESM. Bare package imports browser сам не понимает, поэтому Vite resolve-ит их в URLs; CommonJS/UMD и dependencies из сотен ESM files предварительно bundling-уются для compatibility и меньшего числа requests.
+
 #### Развернутый ответ
 
-В dev-режиме Vite разделяет исходный код приложения и зависимости. Исходные модули отдаются браузеру как native ESM и загружаются по запросу, а зависимости предварительно обрабатываются отдельно. Поэтому старт dev server не требует сборки всего приложения в один большой bundle, а HMR обычно обновляет конкретный участок module graph.
+Production build — отдельный pipeline. Vite 8 создаёт bundle через Rolldown и использует Oxc-based tools; старые projects могут иметь `rollupOptions`/esbuild-specific config. Compatibility aliases не делают старую option вечной: migration guide и plugin compatibility проверяют при major upgrade.
 
-Production build - отдельный режим. Он создаёт оптимизированные assets, применяет minification, hashing, code splitting и обработку CSS/assets. На 16 июля 2026 в документации Vite v8.1.5 production build описан через Rolldown; в старых объяснениях Vite часто встречается Rollup, потому что предыдущие версии production-сборки опирались на него. Поэтому Vite корректнее описывать как build tool/dev server, а не как “просто Rollup wrapper”.
+Vite снимает TypeScript annotations и трансформирует syntax, но не обязан проверить все types. Production gate обычно запускает `tsc --noEmit`/project build отдельно. Аналогично successful build не доказывает lint/tests и runtime correctness.
 
 Конфигурация Vite чувствительна к окружению. `server.proxy` работает только в dev и не заменяет production routing. `base` влияет на пути JS/CSS/img после deploy, особенно если приложение лежит не в корне домена. `import.meta.env` отдаёт в клиент только переменные с prefix `VITE_*`, и эти значения видны пользователю в bundle. `mode` выбирает `.env` файлы, а `NODE_ENV` отвечает за development/production поведение экосистемы.
 
 Перед deploy проверяют именно собранные assets: `vite build`, затем `vite preview`, smoke tests или CI checks. Dev server нужен для разработки, но не доказывает, что production-сборка корректно работает с нужным `base`, env, sourcemaps, routes и static serving.
-
-> [!faq]+ Уточнения
-> - Vite быстрее в dev за счёт ESM-first модели, pre-bundling зависимостей и точечного HMR.
-> - Webpack остаётся актуален в legacy/enterprise проектах, Module Federation и сложных plugin/loader конфигурациях.
-> - `VITE_*` переменные попадают в клиентский bundle, поэтому secrets туда не кладут.
-> - `vite build --mode staging` остаётся production-сборкой, но берёт staging env.
-> - `server.proxy` решает локальную разработку, а production routing настраивается в Nginx/CDN/backend/hosting.
 
 #### Пример использования env
 
@@ -114,15 +111,15 @@ if (import.meta.env.DEV) {
 }
 ```
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Считать dev server production-сервером.
-- Класть secrets в `VITE_*` переменные.
-- Забывать, что env values приходят строками.
-- Не запускать production build в CI.
-- Переносить Webpack-mental-model один в один на Vite.
-- Не учитывать `base`, если приложение деплоится не в корень домена.
-- Подключать тяжёлые зависимости в общий entrypoint и удивляться размеру bundle.
+- Native ESM относится к dev source serving; production всё равно создаёт optimized bundles/chunks.
+- Dependency pre-bundling решает CJS/UMD compatibility и request explosion, а не application code splitting.
+- HMR сохраняет часть state только при корректной boundary/framework integration и может fallback-нуть к full reload.
+- Vite transform TypeScript не заменяет `tsc --noEmit`.
+- `server.proxy`/`vite preview` — development verification tools, не production routing/server policy.
+- `VITE_*` и `define` являются public compile-time constants; private values не передают в client graph.
+- `base`, browser target, sourcemaps и advanced bundler options проверяют на production artifact и по docs major version проекта.
 
 #### Связанные темы
 

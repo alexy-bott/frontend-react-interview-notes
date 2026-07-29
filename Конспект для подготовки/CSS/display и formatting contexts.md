@@ -8,20 +8,20 @@ aliases:
   - BFC
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-`display` задаёт, как элемент участвует в layout: каким будет его внешний тип поведения для соседей и внутренний формат раскладки для детей. Классические значения: `block` занимает доступную ширину и начинается с новой строки, `inline` течёт внутри строки и не принимает width/height как block, `inline-block` остаётся inline-соседом, но позволяет задавать размеры, `none` убирает элемент из layout и accessibility tree.
+`display` определяет, какой box создаёт элемент, как этот box участвует в раскладке среди соседей и по какому алгоритму располагаются его дети. Например, block-level box участвует в блочном потоке, inline-level box - в строковом, а `flex` и `grid` создают специальные модели раскладки для потомков.
 
-Отдельно важно понимать formatting contexts. Block formatting context изолирует часть layout: внутри него по-другому схлопываются margins, он содержит floats и помогает предотвратить вытекание layout-эффектов наружу. Современный способ создать BFC - `display: flow-root`. Flex и Grid тоже создают свои formatting contexts и меняют поведение детей.
+Formatting context, или контекст форматирования, задаёт правила расположения группы box. Block formatting context (BFC) изолирует блочную раскладку, содержит внутренние floats и ограничивает схлопывание margins через свою границу. Явно создать BFC можно через `display: flow-root`; Flexbox и Grid создают собственные formatting contexts.
 
 #### Ключевая схема
 
 | Значение | Поведение |
 | --- | --- |
-| `block` | новая строка, доступная ширина |
-| `inline` | внутри строки, размеры ограничены текстовым потоком |
+| `block` | block-level box в обычном потоке |
+| `inline` | inline-level box внутри строки |
 | `inline-block` | inline-сосед + можно задавать размеры |
-| `none` | нет layout box |
+| `none` | элемент не создаёт box и не участвует в layout |
 | `flex` | flex formatting context |
 | `grid` | grid formatting context |
 | `flow-root` | создаёт новый block formatting context |
@@ -33,24 +33,23 @@ display
 -> inner display type: как раскладываются его дети
 ```
 
+#### Базовая модель
+
+Элемент DOM и CSS box - не одно и то же. Один элемент может создать principal box и дополнительные box, например строки или маркеры списка; `display: none` не создаёт box, а `display: contents` убирает principal box элемента, но сохраняет box его потомков.
+
+Outer display type отвечает за участие principal box во внешнем потоке. Inner display type определяет formatting context для содержимого. Например, `display: inline flex` означает inline-level box с flex layout внутри; привычное `display: flex` в обычной записи создаёт block-level flex container.
+
 #### Развернутый ответ
 
-`display` задаёт outer и inner layout behavior. Outer display type описывает, как элемент ведёт себя среди соседей: block, inline, inline-block. Inner display type описывает, как раскладываются дети: flow, flex, grid. Поэтому `display` влияет не только на видимость, но и на модель layout.
+Block-level box с `width: auto` в обычном горизонтальном writing mode обычно заполняет доступное пространство по inline axis. Это следствие алгоритма normal flow, а не буквальное определение `block`: ограничения ширины, writing mode и внешний formatting context могут изменить результат.
 
-Inline-элемент участвует в inline formatting context: его размер определяется содержимым и line box. `width` и `height` не работают как у block. Для явного размера используют `block`, `inline-block`, `flex`, `grid` или другой подходящий display.
+Inline box участвует в строках, а свойства `width` и `height` к обычному non-replaced inline element не применяются так, как к block box. Горизонтальные padding, border и margin учитываются в строке, а вертикальные не раздвигают line boxes тем же способом. Для управляемого прямоугольного размера используют `inline-block`, `block`, `flex` или `grid` в зависимости от задачи.
 
-`display: none` убирает элемент из layout и обычно из accessibility tree. `visibility: hidden` скрывает визуально, но место в layout остаётся. Для интерактивных элементов важно учитывать не только видимость, но и focus, screen readers и возможность взаимодействия.
+`display: none` убирает box вместе с потомками из layout; такое поддерево также не представляется пользователю через accessibility tree. `visibility: hidden` сохраняет занимаемое место, но скрывает элемент и исключает его из фокуса. Если контент нужно скрыть только визуально, но оставить доступным для screen reader, применяют отдельный visually-hidden pattern, а не эти свойства.
 
 Block formatting context изолирует блочную раскладку: содержит floats, предотвращает некоторые случаи margin collapse с внешними элементами и ограничивает влияние внутреннего layout. `display: flow-root` - современный явный способ создать BFC без хаков вроде `overflow: hidden`.
 
-`display: contents` убирает box самого элемента, и дети ведут себя так, будто подняты на уровень выше. Это может помочь layout, но опасно для accessibility и стилизации, если элемент несёт семантику, role или является якорем для CSS/JS.
-
-> [!faq]+ Уточнения
-> - Outer display type влияет на поведение элемента среди соседей.
-> - Inner display type влияет на раскладку детей.
-> - `display: none` убирает layout box, `visibility: hidden` сохраняет место.
-> - `flow-root` создаёт BFC и помогает с floats/margin collapse.
-> - `display: contents` требует проверки accessibility.
+`display: contents` полезен, когда промежуточная DOM-обёртка не должна участвовать в Grid или Flex layout. При этом у элемента исчезает собственный box: на нём нельзя ожидать обычного фона, border или размеров. Для семантических и интерактивных элементов нужно проверять поведение в целевых браузерах и assistive technologies.
 
 #### Пример
 
@@ -67,13 +66,13 @@ Block formatting context изолирует блочную раскладку: �
 
 `flow-root` заставляет контейнер учитывать float внутри и не отдаёт этот layout-эффект наружу.
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Использовать `inline` и ждать нормальной работы `width`/`height`.
-- Скрывать интерактивный элемент визуально, но оставлять его доступным для фокуса.
-- Лечить floats через clearfix-хак, не зная про `flow-root`.
-- Использовать `display: none` для анимируемого раскрытия, а потом удивляться, что transition не работает.
-- Применять `display: contents` к семантическим элементам без проверки accessibility.
+- `block` описывает тип участия в потоке, а заполнение доступной ширины зависит от алгоритма layout и `width: auto`.
+- `display: none` не оставляет box для интерполяции обычного transition между скрытым и видимым состояниями.
+- BFC и stacking context решают разные задачи: первый относится к layout, второй - к порядку отрисовки.
+- `flow-root` явно создаёт BFC без побочного обрезания содержимого через `overflow`.
+- `display: contents` сохраняет DOM-узел, но убирает его principal box; это влияет на оформление и требует проверки доступности.
 
 #### Связанные темы
 
@@ -86,3 +85,5 @@ Block formatting context изолирует блочную раскладку: �
 #### Источники
 
 - [MDN: display](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display)
+- [MDN: Block formatting context](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Display/Block_formatting_context)
+- [CSS Display Module Level 3](https://www.w3.org/TR/css-display-3/)

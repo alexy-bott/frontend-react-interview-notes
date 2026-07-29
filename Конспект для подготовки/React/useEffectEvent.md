@@ -43,13 +43,6 @@ Effect Event является локальной частью конкретно
 
 Это не способ выключить `exhaustive-deps`. Если эффект реально использует значение для синхронизации, значение должно остаться dependency. Effect Event используют для event-логики внутри эффекта: `connected`, `message`, `visibilitychange`, completion callback, observer notification.
 
-> [!faq]+ Уточнения
-> - `useCallback` стабилизирует ссылку на функцию, но зависимости всё равно меняют callback. `useEffectEvent` даёт функции внутри эффекта свежие props/state без resubscribe.
-> - Отключение `exhaustive-deps` прячет проблему от lint; Effect Event явно отделяет нереактивную часть.
-> - Effect Event вызывают из `useEffect`, `useLayoutEffect`, `useInsertionEffect` или другого Effect Event в том же компоненте/хуке.
-> - Его не вызывают во время render, не передают как prop и не используют как обычный click handler.
-> - Если вся логика эффекта должна пересинхронизироваться при изменении значения, значение остаётся в dependencies.
-
 #### Пример
 
 ```tsx

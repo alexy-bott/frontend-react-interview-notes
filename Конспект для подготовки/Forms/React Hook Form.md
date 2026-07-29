@@ -6,9 +6,9 @@ aliases:
   - register
 ---
 
-#### Ответ на 60 секунд
+#### Быстрый ответ
 
-React Hook Form - это библиотека для управления формами в React, которая делает ставку на uncontrolled inputs, регистрацию полей и точечные подписки на form state. Главные API: `useForm`, `register`, `handleSubmit`, `formState`, `watch`, `setValue`, `reset`, `setError`, `clearErrors`. Основная польза - меньше ручного boilerplate для value/onChange/errors и меньше лишних ререндеров в больших формах.
+React Hook Form (RHF) управляет registration, values, validation, errors и submit lifecycle без отдельного React state для каждого нативного input. Нативные fields обычно остаются uncontrolled, а components подписываются только на нужные части form state. Это уменьшает boilerplate и изолирует renders в больших формах, но не заменяет HTML semantics, schema/API contract и server validation.
 
 Базовый поток такой: `useForm` создаёт form controller, `register` подключает нативные поля, `handleSubmit` валидирует форму и отдаёт проверенные values, `formState.errors` хранит ошибки, `reset` сбрасывает форму. Для кастомных controlled-компонентов используют `Controller` или `useController`.
 
@@ -27,27 +27,25 @@ React Hook Form - это библиотека для управления фор
 | `setError` | показать server/manual error |
 | `Controller` | подключить controlled/custom component |
 
-#### Развернутый ответ
+#### Базовая модель
 
 React Hook Form снижает количество ререндеров за счёт uncontrolled inputs и подписок. Нативный input хранит текущее значение в DOM, а библиотека собирает значения через registration и form controller. Родительский компонент не обязан перерендериваться на каждый символ; обновляются только подписанные части `formState` или watched values.
 
 `register("fieldName")` подключает нативное поле к форме: возвращает `name`, `ref`, handlers и validation rules. `handleSubmit` оборачивает submit handler, запускает validation и вызывает success callback только при валидной форме. Для невалидной формы можно передать error callback.
 
-`watch` и `useWatch` нужны, когда значение поля влияет на UI до submit: условное поле, live preview, зависимая валидация, расчёт суммы. Глобальный `watch` на всю форму может увеличить ререндеры и связать UI с лишними values, поэтому подписку делают как можно уже.
+#### Развернутый ответ
+
+`formState` обёрнут в Proxy и включает подписку при чтении свойства во время render. Если component читает только `errors.email` и `isSubmitting`, ему не нужен render на каждое изменение остальных fields. `useFormState` и `useWatch` позволяют перенести подписку ближе к конкретному field/section. Глобальный `watch()` всей формы снова делает dependency широкой.
+
+`watch` и `useWatch` нужны, когда значение поля влияет на UI до submit: conditional field, live preview, dependent validation, расчёт суммы. `getValues` только читает snapshot и не создаёт subscription; он подходит для event handler, но не заставит UI обновляться.
 
 `setError` используют для backend/business errors: email уже занят, неверный пароль, конфликт версии, превышен лимит, правило доступно только серверу. Field errors маппят на конкретные поля, а form-level error - на общий блок или `root`.
 
-`defaultValues` критичны для корректного dirty state и reset. Для edit-form после загрузки данных с backend форму reset-ят актуальными server values, чтобы `isDirty` снова отражал реальные изменения пользователя.
+`defaultValues` являются baseline для dirty comparison и кешируются form instance. Для edit-form данные либо передают как async `defaultValues`, либо после загрузки вызывают `reset(serverValues)`. Значение `undefined` не используют как default controlled field: оно конфликтует с ожидаемым стабильным value.
 
 `shouldUnregister` влияет на условные поля. По умолчанию значение размонтированного поля может сохраняться в form state; с `shouldUnregister: true` поведение ближе к нативной форме: unmounted input удаляется из submission data. Это важно для wizard-форм, conditional sections и DTO, где скрытое поле не должно отправляться.
 
-> [!faq]+ Уточнения
-> - RHF часто ререндерит меньше, потому что значения нативных inputs живут в DOM.
-> - `register` подключает обычные inputs, `Controller` - controlled/custom components.
-> - `handleSubmit` запускает validation и разделяет success/error callbacks.
-> - `watch` создаёт подписку; для точечных мест используют `useWatch`.
-> - `setError` нужен для backend field errors и form-level errors.
-> - `shouldUnregister` выбирают осознанно для conditional fields.
+`handleSubmit` управляет validation и `isSubmitting`, но не скрывает exception из async submit callback. Ожидаемые API errors перехватывают, переводят в field/root errors и сохраняют введённые values; неожиданные ошибки передают application error boundary/logging layer.
 
 #### Пример
 
@@ -78,12 +76,24 @@ function LoginForm() {
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <label htmlFor="email">Email</label>
-      <input id="email" type="email" {...register("email", { required: "Email is required" })} />
-      {errors.email && <p role="alert">{errors.email.message}</p>}
+      <input
+        id="email"
+        type="email"
+        aria-invalid={Boolean(errors.email)}
+        aria-describedby={errors.email ? "email-error" : undefined}
+        {...register("email", { required: "Email is required" })}
+      />
+      {errors.email && <p id="email-error">{errors.email.message}</p>}
 
       <label htmlFor="password">Password</label>
-      <input id="password" type="password" {...register("password", { required: "Password is required" })} />
-      {errors.password && <p role="alert">{errors.password.message}</p>}
+      <input
+        id="password"
+        type="password"
+        aria-invalid={Boolean(errors.password)}
+        aria-describedby={errors.password ? "password-error" : undefined}
+        {...register("password", { required: "Password is required" })}
+      />
+      {errors.password && <p id="password-error">{errors.password.message}</p>}
 
       <button type="submit" disabled={isSubmitting}>
         Sign in
@@ -93,14 +103,15 @@ function LoginForm() {
 }
 ```
 
-#### Частые ошибки
+#### Ключевые уточнения
 
-- Использовать React Hook Form как обычный controlled state manager без причины.
-- Забывать `defaultValues`, а потом получать некорректный `isDirty` или reset.
-- Подписывать весь компонент на слишком много `formState` и удивляться ререндерам.
-- Использовать `watch` глобально там, где достаточно `getValues` или `useWatch`.
-- Не маппить server errors через `setError`.
-- Не связывать ошибки с полями доступным образом.
+- `register` подключает native field, `Controller`/`useController` адаптирует controlled custom component.
+- Производительность RHF опирается на DOM values и узкие subscriptions; глобальный `watch` может вернуть широкие renders.
+- `defaultValues` задают baseline для `isDirty`; после загрузки edit data этот baseline обновляют через `reset`.
+- `getValues` читает snapshot без subscription, `useWatch` обновляет UI при изменении выбранных fields.
+- Validation mode выбирают по UX: проверка каждого `onChange` даёт ранний feedback, но запускает больше работы.
+- `setError` отображает server field/root error, но server response сначала маппят в стабильный frontend contract.
+- `handleSubmit` не заменяет обработку rejected request и неожиданных exceptions.
 
 #### Связанные темы
 
