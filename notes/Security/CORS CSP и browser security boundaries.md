@@ -6,18 +6,20 @@
 
 ## Быстрый ответ
 
-Same-origin policy, CORS и CSP решают разные задачи браузерной безопасности:
+Same-origin policy, CORS и CSP регулируют разные browser security boundaries, то есть разные границы безопасности браузера.
 
-| Механизм | Главный вопрос |
-| --- | --- |
-| Same-origin policy | Может ли JavaScript одной страницы читать данные другой страницы? |
-| CORS | Разрешает ли сервер JavaScript-коду другого origin прочитать HTTP-ответ? |
-| CSP | Какие scripts, ресурсы и сетевые соединения разрешены самой странице? |
+| Механизм | Что контролирует | Чего не контролирует |
+| --- | --- | --- |
+| Same-origin policy, или SOP | Может ли JavaScript одного origin читать данные и объекты другого origin | Права пользователя на сервере |
+| CORS | Может ли JavaScript прочитать cross-origin HTTP-response | Возможность вызвать API из `curl`, backend или mobile application |
+| CSP | Какие scripts и ресурсы может загрузить страница и куда она может подключаться | Корректность authorization и безопасную обработку данных |
+| SameSite и CSRF-защита | Когда browser отправляет автоматически прикладываемые cookies | Доступ JavaScript к cross-origin response |
+| HTTPS и HSTS | Используется ли защищённое сетевое соединение | XSS, CSRF и ошибки проверки прав |
 
-Origin, или источник страницы, для обычного HTTP(S)-адреса состоит из:
+Origin, или источник документа, для обычного HTTP(S)-адреса определяется сочетанием:
 
 ```text
-scheme + host + port
+origin = scheme + host + effective port
 ```
 
 Например:
@@ -27,22 +29,55 @@ https://app.example.com
 https://api.example.com
 ```
 
-имеют разные origins, потому что различаются hosts.
+имеют разные origins, потому что у них разные hosts.
 
-Same-origin policy по умолчанию не позволяет JavaScript страницы свободно читать DOM и ответы другого origin.
+Same-origin policy по умолчанию не позволяет JavaScript страницы свободно читать DOM, storage и HTTP-ответы другого origin.
 
-CORS позволяет серверу ослабить это ограничение и явно разрешить выбранному frontend-origin читать HTTP-ответ.
+CORS позволяет server ослабить это ограничение и явно разрешить выбранному frontend-origin прочитать HTTP-response.
 
-CSP ограничивает возможности уже загруженной страницы: откуда она может запускать JavaScript, загружать изображения, открывать WebSocket и отправлять формы.
+CSP ограничивает возможности самой страницы:
 
-CORS не является authentication или authorization. Сервер всё равно обязан проверять пользователя, его права и входные данные.
+- откуда разрешено загружать JavaScript;
+- к каким API и WebSocket endpoints можно подключаться;
+- кто может встроить страницу в iframe;
+- куда разрешено отправлять HTML forms.
 
-CSP не исправляет XSS автоматически. Она уменьшает вероятность запуска внедрённого кода и ограничивает возможный ущерб, но приложение всё равно должно безопасно выводить недоверенные данные.
+CORS не является authentication или authorization. Даже правильно настроенный CORS не освобождает API от проверки:
+
+- кто выполняет запрос;
+- имеет ли пользователь право на действие;
+- корректны ли переданные данные;
+- не является ли запрос CSRF-атакой.
+
+CSP не исправляет XSS автоматически. Она уменьшает вероятность выполнения внедрённого кода и ограничивает часть его возможностей, но приложение всё равно должно безопасно работать с недоверенными данными.
 
 ## Границы origin
 
+Для обычного HTTP(S)-адреса origin состоит из:
+
 ```text
-origin = scheme + host + effective port
+scheme + host + effective port
+```
+
+**Scheme**, или схема, определяет используемый протокол:
+
+```text
+http
+https
+```
+
+**Host** — имя сервера:
+
+```text
+example.com
+api.example.com
+```
+
+**Effective port**, или фактический порт, — явно указанный порт либо порт по умолчанию для схемы:
+
+```text
+http  → 80
+https → 443
 ```
 
 Разные origins:
@@ -68,95 +103,238 @@ https://example.com:8443
 
 Различается port.
 
-Path на origin не влияет:
+Адреса:
+
+```text
+https://example.com
+https://example.com:443
+```
+
+имеют один effective port и относятся к одному origin.
+
+Path, query и fragment на origin не влияют:
 
 ```text
 https://example.com/users
-https://example.com/orders
+https://example.com/orders?page=2#active
 ```
 
-Оба адреса принадлежат одному origin:
+Оба адреса относятся к origin:
 
 ```text
 https://example.com
 ```
 
-Same-origin policy, или политика одного источника, ограничивает доступ JavaScript одного origin к данным другого.
+### Origin и site — не одно и то же
 
-В первую очередь она защищает чтение:
+Origin является строгой границей и учитывает scheme, host и port.
 
-```text
-страница evil.example
-не может свободно прочитать
-ответ api.bank.example
-```
+Site является более широкой группировкой, которую браузер использует, например, для правил `SameSite` cookies.
 
-Но некоторые cross-origin-действия браузер разрешает.
-
-Например, страница может:
-
-- перейти по ссылке на другой сайт;
-- отправить обычную HTML-форму;
-- загрузить изображение;
-- подключить внешний script;
-- встроить iframe.
-
-Поэтому важно различать:
+Упрощённо:
 
 ```text
-отправить запрос
+https://app.example.com
+https://api.example.com
 ```
 
-и:
+обычно являются:
 
 ```text
-прочитать ответ из JavaScript
+cross-origin
 ```
 
-Same-origin policy часто запрещает второе, но не всегда запрещает первое.
+потому что hosts различаются, но:
 
-Именно поэтому она сама по себе не защищает от CSRF. Вредоносная страница может отправить запрос с автоматически приложенной cookie, даже если не сможет прочитать ответ.
+```text
+same-site
+```
+
+потому что относятся к одному основному домену `example.com` и используют одинаковую схему `https`.
+
+Поэтому возможна ситуация:
+
+- cookie считается same-site и отправляется;
+- JavaScript-запрос остаётся cross-origin;
+- для чтения response требуется CORS.
+
+### Что ограничивает same-origin policy
+
+Same-origin policy, или политика одного источника, мешает коду одного origin произвольно получать доступ к данным другого origin.
+
+Она в первую очередь ограничивает cross-origin reads, то есть чтение чужих данных.
+
+Например, JavaScript страницы:
+
+```text
+https://evil.example
+```
+
+не должен свободно прочитать:
+
+```text
+https://bank.example/account
+```
+
+иначе любой сайт мог бы получать личные данные пользователя из других открытых сессий.
+
+Однако browser разрешает некоторые cross-origin-действия.
+
+Упрощённо их можно разделить на три группы:
+
+| Действие | Типичное поведение |
+| --- | --- |
+| Cross-origin read | Обычно ограничено |
+| Cross-origin write | Часто разрешено |
+| Cross-origin embed | Часто разрешено с дополнительными правилами |
+
+### Cross-origin writes
+
+Cross-origin write означает отправку данных или запуск навигации на другой origin.
+
+Например, браузер позволяет:
+
+- перейти по внешней ссылке;
+- отправить обычную HTML form;
+- открыть другой сайт через `window.location`;
+- отправить часть запросов без CORS preflight.
+
+```html
+<form
+  method="post"
+  action="https://bank.example/transfer"
+>
+  <input name="amount" value="1000">
+</form>
+```
+
+Same-origin policy не гарантирует, что такой запрос не будет отправлен.
+
+Она может запретить атакующей странице прочитать response, но операция на сервере уже могла выполниться.
+
+Именно поэтому SOP и CORS сами по себе не защищают от CSRF.
+
+### Cross-origin embeds
+
+Браузер разрешает встраивать некоторые ресурсы другого origin:
+
+```html
+<img src="https://cdn.example/image.png">
+
+<script src="https://cdn.example/library.js"></script>
+
+<iframe src="https://widget.example"></iframe>
+```
+
+Правила доступа зависят от типа ресурса.
+
+Например, страницу можно встроить в cross-origin iframe, но parent page не получает свободный доступ к DOM этого iframe.
+
+Cross-origin script после загрузки выполняется с правами страницы, которая его подключила.
+
+Это важное отличие:
+
+```text
+script загружен с vendor.example
+→ выполняется внутри app.example
+→ получает доступ к DOM и browser APIs app.example
+```
+
+Поэтому подключение third-party script означает передачу ему значительной части полномочий страницы.
+
+### Cross-origin reads
+
+JavaScript обычно не может:
+
+- прочитать DOM cross-origin iframe;
+- получить содержимое чужого `localStorage`;
+- прочитать body cross-origin Fetch response без CORS;
+- получить большинство свойств cross-origin `Window`.
+
+При этом некоторые ограниченные операции с cross-origin `Window` разрешены, например отправка сообщения через `postMessage`.
+
+### Почему `no-cors` не обходит SOP
 
 Режим:
 
 ```ts
-fetch(url, {
+const response = await fetch(url, {
   mode: "no-cors",
 });
 ```
 
-не отключает same-origin policy.
+не отключает same-origin policy и не открывает JavaScript доступ к чужому API.
 
-JavaScript получит opaque response, или непрозрачный ответ, из которого нельзя прочитать:
+Frontend получает opaque response, или непрозрачный ответ.
 
-- тело;
-- status;
-- большинство заголовков.
+Из него нельзя нормально прочитать:
 
-`no-cors` не является способом получить доступ к чужому API.
-
-Для намеренного обмена данными между страницей и cross-origin iframe используют `postMessage`.
-
-Отправитель указывает точный origin получателя:
+- HTTP status;
+- response body;
+- большинство response headers.
 
 ```ts
+const response = await fetch(
+  "https://api.example.com/data",
+  {
+    mode: "no-cors",
+  },
+);
+
+console.log(response.type); // "opaque"
+```
+
+`no-cors` используется браузером для ограниченных типов запросов, но не является способом обойти CORS.
+
+### Cross-origin обмен через `postMessage`
+
+Для намеренного обмена данными между:
+
+- parent page и iframe;
+- страницей и popup;
+- двумя окнами;
+
+используют `window.postMessage()`.
+
+SOP запрещает напрямую читать DOM другого origin, но `postMessage` создаёт явный канал передачи структурированных сообщений.
+
+Отправитель указывает данные и ожидаемый origin получателя:
+
+```ts
+const widgetOrigin = "https://widget.example";
+
 iframe.contentWindow?.postMessage(
   {
     type: "profile.request",
+    version: 1,
   },
-  "https://widget.example",
+  widgetOrigin,
 );
 ```
 
-Получатель проверяет:
+`targetOrigin` определяет, какому origin разрешено получить сообщение.
 
-- `event.origin` — от какого origin пришло сообщение;
-- `event.source` — от какого окна оно пришло;
-- `event.data` — соответствует ли сообщение ожидаемой структуре.
+Если target window к моменту доставки находится на другом origin, browser отбросит сообщение.
+
+Для чувствительных данных нельзя без необходимости использовать:
+
+```text
+*
+```
+
+Потому что сообщение сможет получить документ с любым текущим origin.
+
+Получатель проверяет три вещи:
+
+1. `event.origin` — origin отправителя.
+2. `event.source` — конкретное окно, отправившее сообщение.
+3. `event.data` — структуру и содержимое сообщения.
 
 ```ts
+const appOrigin = "https://app.example.com";
+
 window.addEventListener("message", (event) => {
-  if (event.origin !== "https://app.example.com") {
+  if (event.origin !== appOrigin) {
     return;
   }
 
@@ -169,7 +347,8 @@ window.addEventListener("message", (event) => {
   if (
     typeof message !== "object" ||
     message === null ||
-    message.type !== "profile.request"
+    message.type !== "profile.request" ||
+    message.version !== 1
   ) {
     return;
   }
@@ -178,19 +357,45 @@ window.addEventListener("message", (event) => {
 });
 ```
 
-Значение `targetOrigin: "*"` не используют для чувствительных данных, потому что сообщение может получить документ с неожиданным origin.
+Проверка только `event.origin` может быть недостаточной, если с одного разрешённого origin открыто несколько окон.
+
+`event.source` позволяет убедиться, что сообщение пришло от ожидаемого окна.
+
+`event.data` является внешними данными. TypeScript type не проверяет данные во время выполнения, поэтому перед использованием нужна runtime validation, то есть фактическая проверка структуры.
+
+При загрузке iframe parent page может отправить сообщение слишком рано, когда iframe ещё не установил обработчик.
+
+Для этого используют readiness handshake:
+
+```text
+iframe загрузился
+→
+iframe отправил сообщение ready
+→
+parent проверил origin и source
+→
+parent начал отправлять данные
+```
 
 ## CORS
 
-CORS (Cross-Origin Resource Sharing) — механизм, через который сервер разрешает JavaScript-коду другого origin читать HTTP-ответ.
+CORS (Cross-Origin Resource Sharing) — механизм, через который server разрешает browser JavaScript одного origin читать HTTP-response другого origin.
 
-Frontend на:
+CORS не открывает сервер для запросов вообще. Он определяет, получит ли frontend-код доступ к response.
+
+Рассмотрим:
 
 ```text
+Frontend:
 https://app.example.com
+
+API:
+https://api.example.com
 ```
 
-выполняет запрос:
+Origins различаются, поэтому запрос является cross-origin.
+
+Frontend выполняет:
 
 ```ts
 const response = await fetch(
@@ -198,63 +403,116 @@ const response = await fetch(
 );
 ```
 
-Браузер добавляет к запросу:
+Браузер добавляет request header:
 
 ```http
 Origin: https://app.example.com
 ```
 
-Сервер разрешает этому origin читать ответ:
+Server разрешает этому origin читать response:
 
 ```http
 Access-Control-Allow-Origin: https://app.example.com
 ```
 
-Браузер сравнивает origin страницы со значением `Access-Control-Allow-Origin`.
+Браузер получает response, проверяет CORS headers и только после успешной проверки открывает response JavaScript-коду.
 
-Если проверка успешна, JavaScript получает доступ к `Response`.
+Упрощённо:
 
-Если проверка не прошла, браузер скрывает ответ от JavaScript. В `fetch` это обычно выглядит как сетевая ошибка.
+```text
+JavaScript вызывает fetch
+→
+browser добавляет Origin
+→
+server возвращает CORS headers
+→
+browser проверяет policy
+→
+JavaScript получает или не получает response
+```
 
-CORS проверяется браузером. Он не ограничивает:
+### Почему CORS является browser-механизмом
+
+CORS соблюдает browser.
+
+Он не ограничивает:
 
 - `curl`;
 - Postman;
-- мобильное приложение;
+- mobile application;
+- desktop application;
 - другой backend;
-- самостоятельно написанный HTTP-клиент.
+- самостоятельно написанный HTTP client.
 
-Поэтому CORS не защищает API от прямого вызова.
+Такой клиент может отправить запрос независимо от CORS headers.
 
-API всегда самостоятельно проверяет:
+Поэтому API всегда само проверяет:
 
 - authentication — кто выполняет запрос;
-- authorization — имеет ли пользователь право на операцию;
-- validation — корректны ли данные;
-- rate limit;
-- CSRF-защиту при cookie-аутентификации.
+- authorization — имеет ли пользователь право;
+- validation — допустимы ли входные данные;
+- rate limit — не превышена ли допустимая частота;
+- CSRF — не используется ли автоматически приложенная cookie злоумышленником.
 
-### Запрос без preflight
+### Запросы без preflight
 
-Некоторые cross-origin-запросы браузер может отправить сразу.
+Не каждый cross-origin request требует предварительной проверки.
 
-Например, обычный `GET` или HTML-form `POST` с простым набором заголовков.
+Browser может сразу отправить request, если он соответствует ограниченному безопасному для совместимости набору методов, headers и content types.
+
+Такой запрос часто называют simple request, хотя в Fetch Standard используется понятие CORS-safelisted request.
+
+Типичные разрешённые methods:
+
+```text
+GET
+HEAD
+POST
+```
+
+Разрешены только определённые request headers и ограниченные значения `Content-Type`, например:
+
+```text
+application/x-www-form-urlencoded
+multipart/form-data
+text/plain
+```
+
+Упрощённый поток:
 
 ```text
 actual request
 →
+server response
+→
 CORS-проверка response
 ```
 
-Такой запрос может изменить данные на сервере, даже если JavaScript потом не получит доступ к ответу.
+Важно: safelisted означает не «безопасный для бизнеса», а «совместимый с запросами, которые Web исторически умел отправлять через HTML forms».
 
-Поэтому отсутствие preflight не означает, что запрос безопасен.
+Такой `POST` может изменить server state.
+
+Следовательно:
+
+```text
+нет preflight
+≠
+операция безопасна
+```
+
+и:
+
+```text
+нет preflight
+≠
+CSRF невозможен
+```
 
 ### Preflight
 
-Preflight, или предварительный запрос, — автоматический `OPTIONS`, который браузер отправляет перед более сложным cross-origin-запросом.
+Preflight, или предварительный CORS-запрос, — автоматический `OPTIONS`, которым browser спрашивает server, разрешено ли отправить основной запрос с указанными method и headers.
 
-Например, frontend хочет выполнить:
+Например, frontend хочет отправить:
 
 ```http
 PATCH /users/42
@@ -262,7 +520,9 @@ Content-Type: application/json
 Authorization: Bearer <token>
 ```
 
-Перед ним браузер отправит:
+Такой request не соответствует CORS safelist.
+
+Сначала browser отправляет:
 
 ```http
 OPTIONS /users/42
@@ -271,7 +531,13 @@ Access-Control-Request-Method: PATCH
 Access-Control-Request-Headers: authorization, content-type
 ```
 
-Сервер отвечает:
+Headers означают:
+
+- `Origin` — какой frontend хочет выполнить запрос;
+- `Access-Control-Request-Method` — какой method будет у основного запроса;
+- `Access-Control-Request-Headers` — какие дополнительные headers он содержит.
+
+Server отвечает:
 
 ```http
 HTTP/1.1 204 No Content
@@ -280,34 +546,210 @@ Access-Control-Allow-Methods: PATCH
 Access-Control-Allow-Headers: Authorization, Content-Type
 ```
 
-Preflight проверяет, разрешает ли сервер браузеру отправить запрос с такими:
+После успешной проверки browser отправляет основной request.
 
-- method;
-- headers;
-- origin.
+```text
+preflight OPTIONS
+→
+CORS-разрешение
+→
+actual PATCH
+→
+CORS-проверка actual response
+```
+
+Успешный preflight означает только:
+
+```text
+server сообщает browser,
+что понимает и разрешает такой cross-origin request
+```
 
 Preflight не проверяет:
 
-- личность пользователя;
-- права пользователя;
-- корректность body;
-- бизнес-правила.
+- пользователя;
+- его бизнес-права;
+- request body;
+- существование ресурса;
+- допустимость изменения;
+- баланс счёта;
+- принадлежность заказа.
 
-После успешного preflight сервер всё равно обязан полностью проверить основной запрос.
+Все эти проверки выполняются при обработке основного запроса.
 
-Результат preflight можно временно кешировать:
+Preflight обычно не содержит пользовательскую cross-origin cookie. Поэтому нельзя проектировать CORS так, чтобы `OPTIONS` требовал обычную пользовательскую аутентификацию.
+
+### Кеширование preflight
+
+Server может разрешить browser временно сохранить успешный результат preflight:
 
 ```http
 Access-Control-Max-Age: 600
 ```
 
-Это уменьшает количество повторных `OPTIONS`.
+Значение указывается в секундах.
 
-### Запросы с cookies
+В течение этого времени browser может не отправлять повторный `OPTIONS` для подходящего сочетания:
 
-По умолчанию cross-origin `fetch` не отправляет cookies как credentialed-запрос.
+- origin;
+- URL;
+- method;
+- request headers.
 
-Для их отправки используют:
+Preflight cache является специальным внутренним кешем браузера и отличается от обычного HTTP cache.
+
+Browser может ограничить максимальное время хранения независимо от значения server.
+
+### Основные CORS response headers
+
+#### `Access-Control-Allow-Origin`
+
+Определяет origin, которому разрешено читать response:
+
+```http
+Access-Control-Allow-Origin: https://app.example.com
+```
+
+Либо разрешает любой origin в подходящем запросе без credentials:
+
+```http
+Access-Control-Allow-Origin: *
+```
+
+Header не принимает список origins:
+
+```http
+Access-Control-Allow-Origin:
+  https://a.example, https://b.example
+```
+
+Такой формат некорректен.
+
+Если server поддерживает несколько frontend origins, он:
+
+1. Получает `Origin`.
+2. Сравнивает его со строгим allowlist.
+3. Возвращает одно совпавшее значение.
+
+Нельзя без проверки отражать любой входящий `Origin`.
+
+Опасная логика:
+
+```text
+получили Origin
+→
+безусловно вернули его в Access-Control-Allow-Origin
+```
+
+фактически разрешает любому сайту читать response.
+
+Сравнивать нужно полный origin:
+
+```text
+scheme + host + port
+```
+
+Проверка:
+
+```ts
+origin.endsWith("example.com")
+```
+
+небезопасна, потому что может разрешить:
+
+```text
+https://notexample.com
+https://evil-example.com
+```
+
+#### `Access-Control-Allow-Methods`
+
+Используется в preflight response и сообщает разрешённые methods:
+
+```http
+Access-Control-Allow-Methods:
+  GET, POST, PATCH, DELETE
+```
+
+Это CORS-разрешение для browser, а не замена server-side routing и authorization.
+
+#### `Access-Control-Allow-Headers`
+
+Сообщает, какие дополнительные request headers разрешены:
+
+```http
+Access-Control-Allow-Headers:
+  Authorization, Content-Type, X-Request-Id
+```
+
+Если frontend хочет передать header, которого нет в разрешённом списке, preflight не пройдёт.
+
+#### `Access-Control-Allow-Credentials`
+
+Разрешает frontend-коду получить credentialed response:
+
+```http
+Access-Control-Allow-Credentials: true
+```
+
+Credentials — данные, которыми browser подтверждает контекст пользователя, например cookies или HTTP authentication information.
+
+Значение должно быть:
+
+```text
+true
+```
+
+При credentialed request недостаточно только этого header: нужен также точный `Access-Control-Allow-Origin`.
+
+#### `Access-Control-Expose-Headers`
+
+Даже после успешного CORS JavaScript по умолчанию видит только ограниченный набор response headers.
+
+Чтобы открыть собственный header:
+
+```http
+X-Request-Id: 01HXYZ
+Access-Control-Expose-Headers: X-Request-Id
+```
+
+Frontend сможет прочитать:
+
+```ts
+response.headers.get("X-Request-Id");
+```
+
+`Set-Cookie` нельзя открыть JavaScript-коду через `Access-Control-Expose-Headers`.
+
+Browser обрабатывает его самостоятельно, а Fetch API не позволяет прочитать его как обычный response header.
+
+#### `Access-Control-Max-Age`
+
+Задаёт время хранения успешного preflight result:
+
+```http
+Access-Control-Max-Age: 600
+```
+
+#### `Vary: Origin`
+
+Если server возвращает разный `Access-Control-Allow-Origin` в зависимости от request `Origin`, response должен сообщить HTTP-кешу, что это разные варианты:
+
+```http
+Vary: Origin
+```
+
+Без `Vary` shared cache может:
+
+- вернуть CORS header для другого frontend;
+- отдать response без нужного разрешения;
+- в худшем случае смешать варианты, рассчитанные на разные origins.
+
+### Credentialed CORS и cookies
+
+По умолчанию cross-origin `fetch` не отправляет cookies в режиме `include`.
+
+Для credentialed request frontend указывает:
 
 ```ts
 const response = await fetch(
@@ -318,11 +760,12 @@ const response = await fetch(
 );
 ```
 
-Сервер должен вернуть:
+Server возвращает:
 
 ```http
 Access-Control-Allow-Origin: https://app.example.com
 Access-Control-Allow-Credentials: true
+Vary: Origin
 ```
 
 При credentials нельзя использовать:
@@ -331,131 +774,232 @@ Access-Control-Allow-Credentials: true
 Access-Control-Allow-Origin: *
 ```
 
-Нужен точный origin.
+Нужен точный разрешённый origin.
 
-Если сервер динамически разрешает несколько origins, он сначала проверяет входящий `Origin` по allowlist, а затем возвращает совпавшее значение:
+`credentials: "include"` не заставляет browser отправить любую существующую cookie.
 
-```http
-Access-Control-Allow-Origin: https://app.example.com
-Vary: Origin
-```
+Cookie дополнительно должна соответствовать своим атрибутам:
 
-`Vary: Origin` сообщает HTTP-кешу, что ответ может различаться для разных origins.
-
-Само `credentials: "include"` ещё не гарантирует отправку cookie. Браузер дополнительно проверяет:
-
-- `Domain`;
+- `Domain` или host-only scope;
 - `Path`;
 - `Secure`;
 - `SameSite`;
-- срок действия cookie;
+- срок действия;
+- partitioning;
 - browser privacy policy.
 
-CORS и `SameSite` решают разные задачи.
+Например, cookie с:
 
 ```text
+SameSite=Strict
+```
+
+может не отправиться в cross-site context, даже если Fetch использует `credentials: "include"`.
+
+CORS и cookie policy отвечают на разные вопросы:
+
+```text
+Cookie policy
+→ будет ли credential отправлен
+
 CORS
-→ может ли JavaScript прочитать response
-
-SameSite
-→ будет ли cookie отправлена в cross-site context
+→ сможет ли JavaScript прочитать response
 ```
 
-### Доступ к response headers
+### CORS и CSRF
 
-Даже после успешного CORS JavaScript по умолчанию видит не все response headers.
+CORS не является CSRF-защитой.
 
-Чтобы открыть собственный заголовок:
+CSRF использует тот факт, что browser может автоматически приложить cookie к запросу.
 
-```http
-X-Request-Id: 01HXYZ
-Access-Control-Expose-Headers: X-Request-Id
-```
+Атакующему часто не нужно читать response. Ему достаточно вызвать изменяющую операцию.
 
-Тогда frontend сможет прочитать его:
+Защита от CSRF может включать:
 
-```ts
-response.headers.get("X-Request-Id");
-```
+- `SameSite` cookies;
+- CSRF token;
+- проверку `Origin`;
+- проверку `Referer` в подходящей модели;
+- запрет изменяющих операций через `GET`;
+- повторное подтверждение чувствительной операции;
+- корректную проверку прав на server.
 
-Заголовок `Set-Cookie` JavaScript прочитать не может. Браузер обрабатывает его самостоятельно.
+Preflight может усложнить часть атак, но его нельзя считать единственной CSRF-защитой.
 
-### Почему возникает CORS error
+### CORS errors
 
-CORS error может возникнуть в двух разных ситуациях.
+Для JavaScript CORS failure обычно выглядит как общая network error.
 
-Preflight не прошёл:
+Frontend может не получить:
+
+- HTTP status;
+- body;
+- response headers;
+- точную server-side-причину.
+
+Но возможны два принципиально разных сценария.
+
+#### Preflight не прошёл
 
 ```text
-OPTIONS отклонён
+OPTIONS отправлен
 →
-основной запрос не отправлен
+CORS-разрешение не получено
+→
+actual request не отправлен
 ```
 
-Основной запрос был отправлен:
+В этом случае основная операция обычно не выполнялась.
+
+#### Actual request был обработан
 
 ```text
-server обработал запрос
+actual request отправлен
 →
-response не содержит правильные CORS headers
+server выполнил операцию
 →
-JavaScript не получил доступ к response
+response не прошёл CORS-проверку
+→
+JavaScript получил network error
 ```
 
-Поэтому ошибка CORS не всегда означает, что сервер ничего не изменил.
+В этом случае данные уже могли измениться.
 
-Особенно опасно автоматически повторять `POST`, оплату или создание заказа после такой ошибки: первая операция могла уже выполниться.
+Поэтому нельзя автоматически повторять неидемпотентный request только потому, что frontend получил CORS/network error.
+
+Например, повторная отправка может дважды:
+
+- создать заказ;
+- провести платёж;
+- отправить сообщение;
+- запустить фоновую задачу.
+
+Для критичных операций дополнительно используют idempotency key, то есть уникальный идентификатор операции, по которому server распознаёт повтор.
+
+### Диагностика CORS
 
 При диагностике проверяют:
 
 1. Origin страницы.
-2. URL API.
-3. Был ли `OPTIONS`.
-4. Какие method и headers запросил браузер.
-5. Заголовки preflight response.
-6. Заголовки основного response.
-7. `credentials`.
-8. Атрибуты cookie.
-9. Redirects и proxy.
-10. Добавляются ли CORS headers к ошибочным ответам.
+2. Полный URL API.
+3. Был ли отправлен preflight `OPTIONS`.
+4. Какие method и headers запросил browser.
+5. CORS headers preflight response.
+6. CORS headers actual response.
+7. Redirects.
+8. Настройки reverse proxy, gateway и CDN.
+9. Режим `credentials`.
+10. Атрибуты cookie.
+11. `Vary: Origin`.
+12. Добавляются ли CORS headers к error responses.
 
-WebSocket не использует обычный CORS-протокол.
+Важно проверять response в DevTools Network и сообщения browser Console.
 
-При открытии браузер отправляет `Origin`, а WebSocket-сервер должен самостоятельно проверить его, особенно если аутентификация основана на cookies.
+CORS headers должны добавляться не только к успешному `200`, но и к `401`, `403`, `404`, `422` и другим ответам, если frontend должен иметь возможность прочитать ошибку.
+
+При этом server не должен раскрывать чужому origin чувствительные сведения только ради удобной диагностики.
+
+### CORS и WebSocket
+
+WebSocket не использует обычный CORS protocol и не проверяет `Access-Control-Allow-Origin`.
+
+Во время browser WebSocket handshake передаётся:
+
+```http
+Origin: https://app.example.com
+```
+
+WebSocket server самостоятельно сравнивает его с allowlist.
+
+Это особенно важно при cookie-аутентификации: иначе вредоносная страница может попытаться открыть соединение от имени уже вошедшего пользователя.
+
+Проверка `Origin` не заменяет authentication и authorization. Небраузерный client способен самостоятельно сформировать этот header.
 
 ## CSP
 
-CSP (Content Security Policy) — политика, которая ограничивает возможности страницы.
+CSP (Content Security Policy) — политика, которая ограничивает возможности документа и загруженного в него кода.
 
-Она может определить:
+Основная цель CSP — уменьшить вероятность выполнения внедрённого JavaScript и ограничить направления, в которых страница может загружать или отправлять данные.
 
-- откуда разрешено загружать JavaScript;
-- к каким API можно подключаться;
-- какие изображения и стили допустимы;
+Например, CSP может определить:
+
+- откуда разрешено загружать scripts;
+- какие inline scripts можно выполнить;
+- к каким API и WebSocket endpoints можно подключаться;
+- откуда разрешены изображения, стили и шрифты;
 - кто может встроить страницу в iframe;
-- куда разрешено отправлять формы.
+- куда можно отправить HTML form.
 
-CSP предпочтительно передают через HTTP-header:
+CSP предпочтительно передают через HTTP response header:
 
 ```http
 Content-Security-Policy: default-src 'self'
 ```
 
-Основные directives:
+Policy можно частично передать через `<meta>`:
+
+```html
+<meta
+  http-equiv="Content-Security-Policy"
+  content="default-src 'self'"
+>
+```
+
+Но HTTP header надёжнее:
+
+- действует до обработки HTML;
+- защищает ресурсы, загружаемые в начале документа;
+- поддерживает больше directives;
+- позволяет использовать report-only policy.
+
+Например, `frame-ancestors` не работает из CSP, переданной через `<meta>`.
+
+### Source expressions
+
+В directives используются source expressions, то есть правила, описывающие разрешённые источники.
+
+Частые значения:
+
+| Значение | Смысл |
+| --- | --- |
+| `'self'` | текущий origin |
+| `'none'` | ничего не разрешено |
+| `https:` | любой HTTPS-origin |
+| `https://cdn.example.com` | конкретный origin |
+| `'nonce-...'` | script или style с подходящим одноразовым значением |
+| `'sha256-...'` | содержимое с подходящим cryptographic hash |
+
+`'self'` означает именно origin, а не весь site.
+
+Если страница открыта на:
+
+```text
+https://app.example.com
+```
+
+то `'self'` не включает автоматически:
+
+```text
+https://api.example.com
+```
+
+### Основные CSP directives
 
 | Directive | Что ограничивает |
 | --- | --- |
-| `default-src` | источник по умолчанию для многих типов ресурсов |
-| `script-src` | JavaScript |
-| `style-src` | CSS |
+| `default-src` | источник по умолчанию для многих типов загружаемых ресурсов |
+| `script-src` | JavaScript и inline script execution |
+| `style-src` | CSS и inline styles |
 | `img-src` | изображения |
 | `font-src` | шрифты |
-| `connect-src` | `fetch`, XHR, WebSocket и EventSource |
-| `frame-src` | какие iframe может загрузить страница |
-| `frame-ancestors` | кто может встроить эту страницу |
-| `form-action` | куда разрешено отправлять формы |
-| `object-src` | устаревший plugin content |
-| `base-uri` | какие значения разрешены для `<base>` |
+| `media-src` | audio и video |
+| `connect-src` | Fetch, XHR, WebSocket, EventSource и Beacon |
+| `worker-src` | Worker и Service Worker scripts |
+| `frame-src` | какие iframe может загрузить текущая страница |
+| `frame-ancestors` | кто может встроить текущую страницу |
+| `form-action` | куда разрешено отправлять HTML forms |
+| `object-src` | plugin content через `object` и `embed` |
+| `base-uri` | допустимые значения элемента `<base>` |
 
 Пример:
 
@@ -463,31 +1007,84 @@ Content-Security-Policy: default-src 'self'
 Content-Security-Policy:
   default-src 'self';
   script-src 'self';
+  style-src 'self';
+  img-src 'self' https://cdn.example.com data:;
+  font-src 'self' https://fonts.example.com;
   connect-src 'self' https://api.example.com wss://realtime.example.com;
-  img-src 'self' https://cdn.example.com;
+  frame-src https://widget.example;
   frame-ancestors 'none';
   form-action 'self';
   object-src 'none';
   base-uri 'none'
 ```
 
-Такая policy разрешает ресурсы текущего origin, разрешает обращения к указанному API и WebSocket, запрещает встраивание страницы и plugin content.
+Эта policy:
 
-### CSP для scripts
+- по умолчанию разрешает ресурсы текущего origin;
+- разрешает изображения с CDN;
+- разрешает обращения к API и WebSocket;
+- разрешает загрузить определённый iframe;
+- запрещает другим страницам встраивать текущую страницу;
+- разрешает forms только на текущий origin;
+- запрещает plugin content;
+- запрещает изменение base URL.
+
+### `default-src`
+
+`default-src` является fallback, то есть правилом по умолчанию, для многих directives загрузки.
+
+```http
+Content-Security-Policy:
+  default-src 'self'
+```
+
+Если отдельно не указан `img-src`, изображения будут проверяться по `default-src`.
+
+Но `default-src` не заменяет некоторые directives.
+
+Например, отдельно задают:
+
+```text
+frame-ancestors
+form-action
+base-uri
+```
+
+Policy:
+
+```http
+Content-Security-Policy:
+  default-src 'none'
+```
+
+сама по себе не запрещает другим сайтам встраивать страницу.
+
+Для этого нужен:
+
+```http
+frame-ancestors 'none'
+```
+
+### `script-src`
+
+`script-src` управляет загрузкой и выполнением JavaScript.
 
 Простая policy:
 
 ```http
-script-src 'self'
+Content-Security-Policy:
+  script-src 'self'
 ```
 
-разрешает JavaScript текущего origin.
+разрешает scripts текущего origin.
 
-Но если атакующий может загрузить собственный `.js` на этот же origin, одного `'self'` недостаточно.
+Но `'self'` не гарантирует безопасность, если на текущий origin можно загрузить пользовательский `.js` либо существует endpoint, возвращающий управляемый атакующим JavaScript.
 
-Более строгий подход разрешает конкретные scripts через nonce или hash.
+Строгая script policy чаще строится на nonce или hash.
 
-Nonce — случайное одноразовое значение, созданное сервером для одного HTML-response.
+### Nonce
+
+Nonce — случайное одноразовое значение, создаваемое server для конкретного HTML-response.
 
 Header:
 
@@ -504,140 +1101,535 @@ HTML:
 </script>
 ```
 
-Браузер выполнит script только при совпадении nonce.
+Browser выполнит script только при совпадении nonce.
 
 Nonce должен быть:
 
-- случайным;
+- создан криптографически безопасным генератором;
+- достаточно длинным;
 - непредсказуемым;
 - новым для каждого response;
-- добавленным только доверенным scripts.
+- добавлен только к доверенным scripts.
 
-Нельзя использовать постоянное значение:
+Нельзя использовать постоянный nonce:
 
 ```text
 nonce="frontend"
 ```
 
-Атакующий сможет скопировать его в свой script.
+Если атакующий знает значение, он сможет добавить его к внедрённому script.
 
-Hash разрешает script с конкретным содержимым:
+Server-side template также не должен автоматически копировать nonce на HTML, полностью управляемый пользователем.
+
+Nonce обычно удобен для HTML, который формируется динамически на server.
+
+### Hash
+
+Hash разрешает script с точно определённым содержимым.
+
+Policy:
 
 ```http
 Content-Security-Policy:
-  script-src 'sha256-...'
+  script-src 'sha256-<base64-hash>'
 ```
+
+HTML:
+
+```html
+<script>
+  startApplication();
+</script>
+```
+
+Browser вычисляет hash содержимого script и сравнивает его со значением policy.
 
 Если script изменится, hash перестанет совпадать.
 
-Без необходимости не используют:
+Hash удобен для небольшого стабильного inline script.
+
+При изменении:
+
+- кода;
+- пробелов;
+- переносов строк;
+
+значение может потребовать обновления.
+
+### Nonce и hash — в чём разница
+
+| Механизм | Что подтверждает | Когда удобен |
+| --- | --- | --- |
+| Nonce | Script получил одноразовое разрешение текущего response | Динамический server-rendered HTML |
+| Hash | Содержимое script совпадает с ожидаемым | Стабильный неизменяемый script |
+
+Оба подхода лучше широкой политики, разрешающей любой inline JavaScript.
+
+### `strict-dynamic`
+
+`'strict-dynamic'` — дополнительное правило для `script-src`.
+
+Оно означает, что script, которому уже доверяют через nonce или hash, может программно загрузить другие scripts, и это доверие распространится на них.
+
+```http
+Content-Security-Policy:
+  script-src 'nonce-random-value' 'strict-dynamic'
+```
+
+Например, разрешённый bootstrap script создаёт:
+
+```ts
+const script = document.createElement("script");
+script.src = "/chunks/app.js";
+document.head.append(script);
+```
+
+При `strict-dynamic` такой script может быть разрешён как загруженный доверенным bootstrap-кодом.
+
+Преимущество — не нужно заранее перечислять каждый dynamic chunk в allowlist.
+
+Риск — доверенный script не должен строить `src` из непроверенных данных:
+
+```ts
+script.src = untrustedUrl;
+```
+
+Иначе атакующий может заставить уже разрешённый code загрузить вредоносный script.
+
+`strict-dynamic` является продвинутым механизмом. Его применяют после понимания того, как приложение создаёт и загружает scripts.
+
+### `unsafe-inline` и `unsafe-eval`
+
+Без подтверждённой необходимости избегают:
 
 ```text
 'unsafe-inline'
 'unsafe-eval'
 ```
 
-`'unsafe-inline'` разрешает inline scripts и обработчики вроде:
+`'unsafe-inline'` разрешает широкий класс inline-кода, например:
+
+```html
+<script>
+  run();
+</script>
+```
+
+и inline event handlers:
 
 ```html
 <button onclick="deleteUser()">
+  Удалить
+</button>
 ```
 
-`'unsafe-eval'` разрешает выполнение строк как JavaScript через `eval()` и похожие механизмы.
+Это ослабляет защиту от XSS, потому что внедрённый inline script тоже может стать исполняемым.
 
-Оба значения заметно ослабляют CSP.
+`'unsafe-eval'` разрешает выполнение строк как JavaScript через механизмы вроде:
 
-### Что CSP не исправляет
+```ts
+eval(code);
+new Function(code);
+```
 
-CSP не заменяет безопасную работу с DOM.
+Development-сборка или отдельная библиотека иногда может требовать такие послабления, но production policy должна содержать только действительно необходимые исключения.
 
-Опасный код:
+### `connect-src`
+
+`connect-src` ограничивает сетевые destinations, к которым JavaScript страницы может подключаться.
+
+Он применяется к:
+
+- `fetch`;
+- `XMLHttpRequest`;
+- WebSocket;
+- EventSource;
+- `navigator.sendBeacon()`.
+
+```http
+Content-Security-Policy:
+  connect-src
+    'self'
+    https://api.example.com
+    wss://realtime.example.com
+```
+
+Даже если CORS разрешает frontend читать API, CSP может заблокировать сам запрос, если API отсутствует в `connect-src`.
+
+И наоборот, разрешённый `connect-src` не отменяет CORS.
+
+```text
+CSP connect-src
+→ разрешено ли странице начать соединение
+
+CORS
+→ разрешено ли JavaScript прочитать cross-origin response
+```
+
+`connect-src` также не является authorization. API всё равно проверяет пользователя и его права.
+
+### `frame-src` и `frame-ancestors`
+
+Эти directives решают противоположные задачи.
+
+`frame-src` определяет, какие страницы может встроить текущий документ:
+
+```http
+Content-Security-Policy:
+  frame-src https://widget.example
+```
+
+`frame-ancestors` определяет, кто может встроить текущую страницу:
+
+```http
+Content-Security-Policy:
+  frame-ancestors 'none'
+```
+
+Упрощённо:
+
+```text
+frame-src
+→ что могу встроить я
+
+frame-ancestors
+→ кто может встроить меня
+```
+
+`frame-ancestors 'none'` помогает защищаться от clickjacking.
+
+Clickjacking — атака, при которой страницу помещают в невидимый или замаскированный iframe и заставляют пользователя нажать на реальный элемент, не показывая его настоящий контекст.
+
+`frame-ancestors` нужно передавать HTTP-header. Оно не работает в CSP, объявленной через `<meta>`.
+
+### `form-action`
+
+`form-action` ограничивает destinations HTML forms:
+
+```http
+Content-Security-Policy:
+  form-action 'self'
+```
+
+Это важно, потому что `connect-src` не контролирует обычную отправку form.
+
+Внедрённый `<form>` не должен иметь возможность отправить данные на произвольный чужой адрес.
+
+### `object-src`
+
+`object-src` ограничивает устаревший plugin content через:
+
+```html
+<object>
+<embed>
+```
+
+В современной строгой policy обычно используют:
+
+```http
+object-src 'none'
+```
+
+### `base-uri`
+
+HTML-элемент:
+
+```html
+<base href="https://example.com/">
+```
+
+меняет базовый URL для относительных ссылок.
+
+Если атакующий сможет внедрить `<base>`, относительные URLs scripts, forms и links могут начать указывать на неожиданный origin.
+
+Поэтому строгая policy часто содержит:
+
+```http
+base-uri 'none'
+```
+
+или:
+
+```http
+base-uri 'self'
+```
+
+### CSP и безопасная работа с DOM
+
+CSP не заменяет безопасные DOM APIs.
+
+Опасный пример:
 
 ```ts
 container.innerHTML = userContent;
 ```
 
-может оставаться уязвимым, особенно если policy допускает выполнение подходящего кода или имеет слишком широкие разрешения.
+Если `userContent` не прошёл корректную sanitization, атакующий может внедрить HTML и попытаться использовать доступные XSS-векторы.
 
-Поэтому CSP дополняют:
+Для обычного текста используют:
 
-- использованием `textContent` для обычного текста;
-- безопасными DOM API;
-- sanitization HTML, если HTML действительно нужен;
-- серверной валидацией;
-- ограничением сторонних scripts.
-
-CSP также не защищает от ошибок авторизации.
-
-Если frontend имеет право отправлять запрос к:
-
-```text
-https://api.example.com
+```ts
+container.textContent = userContent;
 ```
 
-директива `connect-src` разрешит сетевое соединение. Но API всё равно должно проверить, имеет ли конкретный пользователь право читать или изменять ресурс.
+Если приложению действительно нужен пользовательский HTML, его очищают проверенным sanitizer, то есть инструментом, удаляющим опасные элементы, attributes и URLs.
 
-### `frame-src` и `frame-ancestors`
-
-Эти directives решают разные задачи.
+CSP является дополнительным барьером:
 
 ```text
-frame-src
-→ какие iframe может загрузить текущая страница
+безопасные DOM APIs и sanitization
+→ предотвращают внедрение
+
+CSP
+→ мешает внедрённому коду выполниться или связаться с запрещённым адресом
 ```
 
-```text
-frame-ancestors
-→ какие страницы могут встроить текущую страницу
+### Third-party scripts
+
+Third-party script — JavaScript, который контролируется другой организацией или загружается из внешнего источника.
+
+Например:
+
+```html
+<script src="https://analytics.example/sdk.js"></script>
 ```
 
-Чтобы полностью запретить встраивание:
+После загрузки script выполняется с правами страницы.
+
+Он потенциально может:
+
+- читать доступный DOM;
+- читать browser storage;
+- изменять интерфейс;
+- отслеживать действия пользователя;
+- отправлять запросы на разрешённые адреса;
+- выполнять действия от имени пользователя через доступные API.
+
+Если CSP разрешает:
 
 ```http
-Content-Security-Policy: frame-ancestors 'none'
+script-src https://analytics.example
 ```
 
-Это помогает защищаться от clickjacking, когда атакующий помещает страницу в невидимый iframe и заставляет пользователя нажимать на элементы, которых он не видит.
+она доверяет scripts с этого origin.
 
-### Проверка CSP перед включением
+Если vendor скомпрометирован или разрешённый origin позволяет публиковать чужие scripts, CSP allowlist не предотвратит выполнение такого кода.
 
-Политику можно сначала запустить в режиме наблюдения:
+Поэтому CSP дополняют другими мерами.
+
+#### Self-hosting
+
+Self-hosting означает размещение копии зависимости на инфраструктуре приложения.
+
+Преимущества:
+
+- приложение контролирует момент обновления;
+- внешний vendor не может незаметно изменить уже раздаваемый файл;
+- уменьшается количество внешних сетевых соединений;
+- CSP становится проще.
+
+Но приложение берёт на себя:
+
+- обновление зависимости;
+- исправление уязвимостей;
+- соблюдение лицензии;
+- контроль целостности сборки.
+
+#### Subresource Integrity
+
+SRI (Subresource Integrity, контроль целостности подресурса) позволяет зафиксировать ожидаемый cryptographic hash внешнего script или stylesheet.
+
+```html
+<script
+  src="https://cdn.example/library.js"
+  integrity="sha384-..."
+  crossorigin="anonymous"
+></script>
+```
+
+Browser:
+
+1. Загружает resource.
+2. Вычисляет его hash.
+3. Сравнивает с `integrity`.
+4. Выполняет resource только при совпадении.
+
+Если CDN или attacker подменит файл, hash не совпадёт и resource будет заблокирован.
+
+Для cross-origin SRI resource должен корректно участвовать в CORS-проверке, поэтому часто нужен:
+
+```html
+crossorigin="anonymous"
+```
+
+SRI защищает от неожиданного изменения содержимого файла, но не ограничивает полномочия script после успешной проверки.
+
+Если ожидаемый script сам является вредоносным или уязвимым, SRI не исправит его.
+
+#### Sandboxed iframe
+
+Недоверенный widget можно запускать не как script внутри основной страницы, а в отдельном iframe с `sandbox`.
+
+```html
+<iframe
+  src="https://widget.example"
+  sandbox="allow-scripts"
+></iframe>
+```
+
+Без дополнительных tokens sandbox ограничивает многие возможности:
+
+- scripts;
+- forms;
+- navigation;
+- popup;
+- обычный origin;
+- доступ к части browser APIs.
+
+В примере `allow-scripts` возвращает возможность выполнять scripts, но остальные ограничения сохраняются.
+
+Permissions добавляют минимально, исходя из задачи.
+
+Следует осторожно сочетать:
+
+```text
+allow-scripts
+allow-same-origin
+```
+
+Если iframe имеет тот же origin, что и parent, эта комбинация может позволить ему получить доступ к parent DOM, удалить `sandbox` attribute и перезагрузиться без ограничений.
+
+Взаимно недоверенный контент безопаснее размещать на отдельном origin.
+
+Для связи с sandboxed iframe используют `postMessage` и проверяют origin, source и data.
+
+### CSP Report-Only
+
+Новую policy удобно сначала запустить в режиме наблюдения:
 
 ```http
-Content-Security-Policy-Report-Only: ...
+Content-Security-Policy-Report-Only:
+  default-src 'self';
+  script-src 'self'
 ```
 
-В этом режиме браузер сообщает о нарушениях, но не блокирует ресурсы.
+Browser сообщает о нарушениях, но не блокирует resources.
 
-Это помогает найти:
+Это помогает обнаружить:
 
 - inline scripts;
 - внешние CDN;
+- analytics;
 - WebSocket endpoints;
-- динамически загружаемые styles;
-- стороннюю аналитику.
+- динамические styles;
+- scripts browser extensions;
+- забытые resources.
 
-После проверки policy включают через обычный:
+После анализа policy включают через:
 
 ```http
 Content-Security-Policy
 ```
 
-Report-only сам по себе страницу не защищает.
+Report-only не защищает страницу. Он только показывает, что было бы заблокировано.
+
+CSP reports могут содержать:
+
+- URL документа;
+- адрес заблокированного resource;
+- название directive;
+- строку и файл script;
+- другие данные о контексте нарушения.
+
+URL иногда содержит чувствительные identifiers или параметры. Поэтому reporting endpoint применяет data minimization, то есть собирает только необходимые данные и хранит их ограниченное время.
+
+Reports приходят от клиента и считаются недоверенными данными.
+
+Endpoint должен использовать:
+
+- ограничение размера request;
+- безопасный parser;
+- rate limit;
+- защиту журналов;
+- ограниченный срок хранения;
+- фильтрацию чувствительных параметров.
+
+Reports также могут быть неполными: browser, extension, network policy или privacy settings могут не отправить их.
+
+### Что CSP не предотвращает
+
+CSP не является полной защитой от XSS и не исправляет:
+
+- unsafe DOM injection;
+- неправильную sanitization;
+- уязвимость разрешённого script;
+- скомпрометированный vendor;
+- server-side authorization bug;
+- утечку через разрешённый API;
+- передачу секрета в уже разрешённую analytics system.
+
+Если вредоносный code уже находится в разрешённом script, CSP может считать его доверенным.
+
+Поэтому CSP является defense in depth, а не единственной линией защиты.
 
 ## Как механизмы сочетаются
 
-| Задача | Основной механизм | Что ещё требуется |
+| Задача | Основной механизм | Дополнение |
 | --- | --- | --- |
-| JavaScript читает cross-origin API | CORS | authentication и authorization |
-| Cookie отправляется cross-site | `SameSite` и CSRF-защита | CORS, если JavaScript должен прочитать ответ |
-| Ограничить выполнение scripts | CSP | безопасная работа с DOM |
-| Защитить сетевой трафик | HTTPS | проверки прав и защита приложения |
-| Запретить встраивание страницы | CSP `frame-ancestors` | безопасный UI |
-| Обменяться данными с iframe | `postMessage` | проверка `origin`, `source` и данных |
-| Ограничить WebSocket endpoint | CSP `connect-src` | проверка `Origin` и аутентификация на сервере |
+| Запретить JavaScript читать данные другого origin | Same-origin policy | CORS для намеренного доступа |
+| Разрешить frontend читать cross-origin API | CORS | authentication и authorization |
+| Ограничить отправку cookie cross-site | `SameSite` | CSRF token и server-side-проверки |
+| Ограничить выполнение scripts | CSP | безопасные DOM APIs и sanitization |
+| Зафиксировать содержимое внешнего script | SRI | CSP и контроль vendor |
+| Изолировать недоверенный widget | iframe `sandbox` | отдельный origin и `postMessage` |
+| Запретить встраивание страницы | CSP `frame-ancestors` | безопасный интерфейс |
+| Ограничить Fetch и WebSocket destinations | CSP `connect-src` | CORS и server authorization |
+| Защитить данные в сети | HTTPS | HSTS и application security |
+| Обмениваться данными между iframe и parent | `postMessage` | проверка origin, source и data |
 
-Пример credentialed cross-origin API:
+### HTTPS и HSTS
+
+HTTPS защищает трафик между browser и TLS endpoint:
+
+- шифрует данные;
+- защищает от незаметного изменения в пути;
+- подтверждает сервер через certificate.
+
+HTTPS не защищает от JavaScript, который уже легально выполняется внутри страницы.
+
+HSTS (HTTP Strict Transport Security) — response header, которым сайт сообщает browser:
+
+```text
+в дальнейшем обращайся ко мне только через HTTPS
+```
+
+Пример:
+
+```http
+Strict-Transport-Security:
+  max-age=31536000;
+  includeSubDomains
+```
+
+`max-age` задаёт срок действия policy в секундах.
+
+`includeSubDomains` распространяет правило на поддомены.
+
+После получения HSTS policy browser автоматически преобразует попытки обращения по HTTP в HTTPS и не позволяет пользователю обойти ошибку certificate обычным подтверждением.
+
+HSTS помогает против downgrade-сценариев, где пользователя пытаются оставить на HTTP.
+
+Но при первом посещении browser ещё может не знать policy. HSTS preload позволяет заранее включить подходящий домен в список браузера, однако это требует отдельной осторожной настройки и готовности всех поддоменов работать через HTTPS.
+
+HSTS не заменяет:
+
+- CSP;
+- CORS;
+- CSRF-защиту;
+- server authorization;
+- безопасную работу с DOM.
+
+### Пример: frontend и API на разных origins
 
 ```text
 Frontend:
@@ -647,38 +1639,95 @@ API:
 https://api.example.com
 ```
 
-1. Frontend выполняет `fetch` с `credentials: "include"`.
-2. Браузер решает, подходит ли cookie по `SameSite`, `Secure` и другим атрибутам.
-3. При необходимости браузер выполняет preflight.
-4. API проверяет сессию и права пользователя.
-5. API возвращает CORS headers для frontend-origin.
-6. Браузер разрешает JavaScript прочитать response.
-7. CSP страницы дополнительно определяет, разрешено ли подключение к этому API через `connect-src`.
+Frontend выполняет:
 
-Каждый механизм отвечает только за свою часть.
+```ts
+await fetch("https://api.example.com/me", {
+  credentials: "include",
+});
+```
+
+Полный поток может выглядеть так:
+
+1. CSP страницы проверяет, разрешён ли `https://api.example.com` в `connect-src`.
+2. Browser проверяет, подходит ли cookie по `Domain`, `Path`, `Secure`, `SameSite` и другим правилам.
+3. Если request требует preflight, browser отправляет `OPTIONS`.
+4. API возвращает CORS-разрешение для `https://app.example.com`.
+5. Browser отправляет actual request.
+6. API проверяет session и права пользователя.
+7. API возвращает response и CORS headers.
+8. Browser проверяет CORS policy.
+9. JavaScript получает response.
+10. SOP продолжает запрещать frontend произвольный доступ к другим неразрешённым origins.
+
+Каждый механизм выполняет только свою часть.
+
+### Пример: внешний analytics script
+
+Страница подключает:
+
+```html
+<script
+  src="https://analytics.example/sdk.js"
+  integrity="sha384-..."
+  crossorigin="anonymous"
+></script>
+```
+
+Защита распределяется так:
+
+1. HTTPS защищает загрузку по сети.
+2. SRI проверяет, что файл совпадает с ожидаемым hash.
+3. CSP решает, разрешён ли этот script source.
+4. После выполнения script получает полномочия страницы.
+5. `connect-src` ограничивает destinations его сетевых запросов.
+6. Server APIs продолжают проверять права пользователя.
+7. Полный отказ от ненужного third-party code уменьшает поверхность атаки сильнее, чем одна дополнительная policy.
 
 ## Ключевые уточнения
 
-- Origin состоит из scheme, host и port.
+- Origin состоит из scheme, host и effective port.
+- Path, query и fragment не входят в origin.
+- Поддомены обычно имеют разные origins.
 - Same-origin policy в первую очередь ограничивает чтение cross-origin данных.
-- Cross-origin request иногда отправляется, даже если JavaScript не сможет прочитать response.
-- CORS разрешает браузерному JavaScript читать response другого origin.
-- CORS не является authentication, authorization или CSRF-защитой.
-- Preflight проверяет разрешённые method и headers, но не права пользователя.
-- Успешный preflight не отменяет проверку основного запроса.
-- CORS error не доказывает, что сервер не обработал запрос.
+- SOP может разрешить отправку запроса, но запретить JavaScript читать response.
+- Поэтому SOP и CORS сами по себе не предотвращают CSRF.
+- `no-cors` возвращает opaque response и не является обходом SOP.
+- `postMessage` создаёт явный cross-origin-канал.
+- При `postMessage` проверяют `targetOrigin`, `event.origin`, `event.source` и структуру `event.data`.
+- CORS определяет, может ли browser JavaScript прочитать cross-origin response.
+- CORS не ограничивает `curl`, backend и другие небраузерные clients.
+- CORS не заменяет authentication, authorization и validation.
+- Request без preflight всё равно может изменить server state.
+- Preflight проверяет origin, method и request headers, но не бизнес-права пользователя.
+- Успешный preflight не отменяет проверку actual request и actual response.
 - Credentialed CORS требует точного `Access-Control-Allow-Origin`.
-- При credentialed CORS нельзя использовать `Access-Control-Allow-Origin: *`.
-- Для динамического origin обычно нужен `Vary: Origin`.
-- `Access-Control-Expose-Headers` открывает frontend-коду дополнительные response headers.
-- `Set-Cookie` недоступен для чтения через Fetch.
-- `no-cors` не обходит same-origin policy.
-- CSP ограничивает ресурсы и действия страницы.
-- CSP nonce должен быть случайным и новым для каждого response.
-- CSP не заменяет sanitization и безопасные DOM API.
-- `frame-src` определяет загружаемые iframe, а `frame-ancestors` — кто может встроить страницу.
-- `connect-src` ограничивает Fetch, WebSocket и EventSource, но не заменяет серверную авторизацию.
-- `postMessage` требует точного `targetOrigin` и проверки `event.origin`, `event.source` и `event.data`.
+- При credentials нельзя использовать `Access-Control-Allow-Origin: *`.
+- `credentials: "include"` не отменяет cookie attributes и browser privacy policy.
+- При динамическом разрешении origin обычно нужен `Vary: Origin`.
+- `Access-Control-Expose-Headers` открывает JavaScript дополнительные response headers.
+- `Set-Cookie` нельзя прочитать через Fetch.
+- CORS error не доказывает, что server не обработал actual request.
+- WebSocket не использует обычные CORS response headers; server проверяет `Origin` самостоятельно.
+- CSP ограничивает resources и возможности страницы.
+- CSP предпочтительно передавать HTTP-header.
+- `default-src` не заменяет `frame-ancestors`, `form-action` и `base-uri`.
+- CSP nonce должен быть непредсказуемым и новым для каждого response.
+- CSP hash привязан к конкретному содержимому script.
+- `'unsafe-inline'` и `'unsafe-eval'` заметно ослабляют script policy.
+- `connect-src` ограничивает Fetch, XHR, WebSocket и EventSource.
+- `frame-src` определяет, что может встроить страница.
+- `frame-ancestors` определяет, кто может встроить страницу.
+- `form-action` ограничивает destinations HTML forms.
+- CSP не заменяет sanitization и безопасные DOM APIs.
+- Разрешённый third-party script выполняется с полномочиями страницы.
+- SRI проверяет содержимое resource, но не ограничивает его полномочия после выполнения.
+- Self-hosting увеличивает контроль, но переносит ответственность за обновление зависимости на приложение.
+- Iframe `sandbox` ограничивает возможности недоверенного документа.
+- CSP Report-Only помогает подготовить policy, но ничего не блокирует.
+- CSP reports могут содержать чувствительные данные и считаются недоверенным input.
+- HTTPS защищает transport, а HSTS заставляет browser использовать HTTPS в будущих обращениях.
+- Ни один отдельный механизм не заменяет остальные уровни защиты.
 
 ## Связанные темы
 
@@ -694,7 +1743,10 @@ https://api.example.com
 - [WHATWG Fetch Standard: CORS protocol](https://fetch.spec.whatwg.org/#http-cors-protocol)
 - [WHATWG HTML Standard: Origins](https://html.spec.whatwg.org/multipage/browsers.html#origins)
 - [WHATWG HTML Standard: Cross-document messaging](https://html.spec.whatwg.org/multipage/web-messaging.html)
+- [WHATWG HTML Standard: The iframe element](https://html.spec.whatwg.org/multipage/iframe-embed-object.html#the-iframe-element)
 - [W3C: Content Security Policy Level 3](https://www.w3.org/TR/CSP3/)
+- [W3C: Subresource Integrity](https://www.w3.org/TR/sri-2/)
+- [RFC 6797: HTTP Strict Transport Security](https://www.rfc-editor.org/rfc/rfc6797)
 - [MDN: Same-origin policy](https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy)
 - [MDN: Cross-Origin Resource Sharing](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)
 - [MDN: Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP)
