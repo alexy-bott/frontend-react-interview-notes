@@ -1,7 +1,7 @@
 # Redux и Flux
 
 <!-- NOTE-NAV-TOP:START -->
-[← Reconciliation](<./Reconciliation.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Redux Toolkit →](<./Redux Toolkit.md>)
+[← Portal](<./Portal.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Redux Toolkit →](<./Redux Toolkit.md>)
 <!-- NOTE-NAV-TOP:END -->
 
 ## Быстрый ответ
@@ -146,5 +146,5 @@ export const store = configureStore({
 ---
 
 <!-- NOTE-NAV-BOTTOM:START -->
-[← Reconciliation](<./Reconciliation.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Redux Toolkit →](<./Redux Toolkit.md>)
+[← Portal](<./Portal.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Redux Toolkit →](<./Redux Toolkit.md>)
 <!-- NOTE-NAV-BOTTOM:END -->

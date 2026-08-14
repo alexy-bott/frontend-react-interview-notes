@@ -1,7 +1,7 @@
 # Fiber
 
 <!-- NOTE-NAV-TOP:START -->
-[← Как работает React](<./Как работает React.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [key →](<./key.md>)
+[← Как работает React](<./Как работает React.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Reconciliation →](<./Reconciliation.md>)
 <!-- NOTE-NAV-TOP:END -->
 
 ## Быстрый ответ
@@ -97,5 +97,5 @@ Commit phase остаётся синхронной: DOM-мутации и layout
 ---
 
 <!-- NOTE-NAV-BOTTOM:START -->
-[← Как работает React](<./Как работает React.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [key →](<./key.md>)
+[← Как работает React](<./Как работает React.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Reconciliation →](<./Reconciliation.md>)
 <!-- NOTE-NAV-BOTTOM:END -->

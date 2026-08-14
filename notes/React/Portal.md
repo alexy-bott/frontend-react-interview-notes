@@ -1,7 +1,7 @@
 # Portal
 
 <!-- NOTE-NAV-TOP:START -->
-[← Lifecycle](<./Lifecycle.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Reconciliation →](<./Reconciliation.md>)
+[← Lifecycle](<./Lifecycle.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Redux и Flux →](<./Redux и Flux.md>)
 <!-- NOTE-NAV-TOP:END -->
 
 ## Быстрый ответ
@@ -164,5 +164,5 @@ HTML должен содержать независимые контейнеры
 ---
 
 <!-- NOTE-NAV-BOTTOM:START -->
-[← Lifecycle](<./Lifecycle.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Reconciliation →](<./Reconciliation.md>)
+[← Lifecycle](<./Lifecycle.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Redux и Flux →](<./Redux и Flux.md>)
 <!-- NOTE-NAV-BOTTOM:END -->

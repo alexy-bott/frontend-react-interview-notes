@@ -1,7 +1,7 @@
 # Server state и React Query
 
 <!-- NOTE-NAV-TOP:START -->
-[← Состояние в React](<./Состояние в React.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Error Boundaries →](<./Error Boundaries.md>)
+[← Состояние в React](<./Состояние в React.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [key →](<./key.md>)
 <!-- NOTE-NAV-TOP:END -->
 
 ## Быстрый ответ
@@ -240,5 +240,5 @@ export function UsersPage({ page }: { page: number }) {
 ---
 
 <!-- NOTE-NAV-BOTTOM:START -->
-[← Состояние в React](<./Состояние в React.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Error Boundaries →](<./Error Boundaries.md>)
+[← Состояние в React](<./Состояние в React.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [key →](<./key.md>)
 <!-- NOTE-NAV-BOTTOM:END -->

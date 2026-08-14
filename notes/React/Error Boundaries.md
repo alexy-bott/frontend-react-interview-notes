@@ -1,7 +1,7 @@
 # Error Boundaries
 
 <!-- NOTE-NAV-TOP:START -->
-[← Server state и React Query](<./Server state и React Query.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Хуки →](<./Хуки.md>)
+[← key](<./key.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Хуки →](<./Хуки.md>)
 <!-- NOTE-NAV-TOP:END -->
 
 ## Быстрый ответ
@@ -147,5 +147,5 @@ function logError(error: Error, componentStack: string | null) {
 ---
 
 <!-- NOTE-NAV-BOTTOM:START -->
-[← Server state и React Query](<./Server state и React Query.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Хуки →](<./Хуки.md>)
+[← key](<./key.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Хуки →](<./Хуки.md>)
 <!-- NOTE-NAV-BOTTOM:END -->

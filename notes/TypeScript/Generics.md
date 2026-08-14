@@ -12,6 +12,18 @@ Generics применяют в функциях, коллекциях, API-об�
 
 Constraint `T extends U` задаёт минимальные требования к `T`. Он нужен, если generic-код обращается к известным свойствам. Generic существует только при проверке типов и не валидирует значение в runtime.
 
+## Карта темы
+
+| Часть модели | Роль | Пример |
+| --- | --- | --- |
+| Параметр типа | обозначает конкретный тип текущего использования | `T` в `identity<T>` |
+| Inference | выводит параметр из аргументов или контекста | `first(users)` |
+| Constraint | ограничивает доступные типу операции | `T extends { id: string }` |
+| Связь параметров | согласует объект, ключ и результат | `K extends keyof T`, `T[K]` |
+| Default | задаёт тип, если подходящий кандидат не выведен | `TError = Error` |
+| `const` type parameter | сохраняет более узкий тип литерала при inference | `const T extends readonly unknown[]` |
+| Runtime-граница | требует отдельной проверки внешних данных | `unknown`, guard или schema |
+
 ## Какую проблему решает generic
 
 Без generic приходится выбрать между дублированием overloads, потерей точности через `unknown` и отключением проверки через `any`:
@@ -111,9 +123,30 @@ interface Repository<TEntity> {
 
 Параметр по умолчанию `TError = Error` позволяет не повторять распространённый вариант, но при необходимости заменить его. Имена `TData`, `TError`, `TKey` понятнее одиночных букв, когда параметров несколько или область большая.
 
+Default должен удовлетворять constraint параметра. После параметра с default нельзя объявлять обязательный параметр, а если inference не нашёл подходящего кандидата, TypeScript использует default.
+
+## `const` type parameters
+
+Начиная с TypeScript 5.0 модификатор `const` просит выводить более узкий литеральный тип для объекта или массива, созданного прямо в вызове:
+
+```ts
+function tuple<const T extends readonly unknown[]>(value: T): T {
+  return value;
+}
+
+const point = tuple(["x", 1]);
+// readonly ["x", 1]
+
+const values = ["x", 1];
+const widened = tuple(values);
+// (string | number)[]
+```
+
+`const` у параметра типа помогает inference библиотечного API, но не делает заранее объявленную изменяемую переменную `readonly`.
+
 ## Когда generic лишний
 
-Generic должен связывать хотя бы две позиции или сохранять информацию для дальнейшего использования:
+Generic обычно должен связывать хотя бы две позиции или сохранять информацию для дальнейшего использования:
 
 ```ts
 function log<T>(value: T): void {
@@ -121,7 +154,7 @@ function log<T>(value: T): void {
 }
 ```
 
-Здесь `T` нигде не используется кроме одного входа. Функция не возвращает значение и не связывает его с callback или другим аргументом, поэтому проще и честнее `log(value: unknown): void`.
+Здесь `T` нигде не используется кроме одного входа. Функция не возвращает значение и не связывает его с callback или другим аргументом, поэтому проще и честнее `log(value: unknown): void`. Это практическая эвристика, а не запрет на любое одиночное употребление параметра типа.
 
 Слишком широкий constraint также может скрывать более простой контракт. Если функция всегда работает только с `User`, generic `T extends User` не делает её универсальной автоматически.
 
@@ -135,7 +168,18 @@ function parse<T>(json: string): T {
 }
 ```
 
-Такая функция не проверяет `T`; она только централизует assertion. Без schema или guard вызов `parse<User>(...)` может вернуть объект любой формы. Generic описывает связь статических типов, а не создаёт runtime-информацию о них.
+Такая функция не проверяет `T`; она только централизует assertion. Без schema или guard вызов `parse<User>(...)` может вернуть объект любой формы. На внешней границе безопасный API возвращает `unknown` либо принимает runtime-схему, из которой выводится проверенный `T`. Generic описывает связь статических типов, а не создаёт runtime-информацию о них.
+
+## Где применяется во frontend
+
+| Ситуация | Какую связь выражает generic |
+| --- | --- |
+| API-обёртка или query hook | тип проверенных данных связан с результатом запроса |
+| Таблица | тип записи связан с ключами и render-функциями колонок |
+| Select или Combobox | тип option связан с `value` и `onChange` |
+| Форма | имена полей связаны с типами их значений |
+| Repository или cache | тип сущности сохраняется в операциях чтения и записи |
+| Runtime-схема | проверяющее значение связано с типом подтверждённого результата |
 
 ## Ключевые уточнения
 
@@ -143,6 +187,8 @@ function parse<T>(json: string): T {
 - Type parameter выбирается для конкретного вызова, а реализация должна быть корректна для всех допустимых вариантов.
 - `extends` у generic задаёт constraint, а не наследование runtime-класса.
 - Явный type argument не является валидацией и может создать ложное доверие к внешним данным.
+- Union задаёт набор вариантов, а generic сохраняет связь с конкретным типом текущего вызова.
+- `const` type parameter влияет на inference литерала, но не добавляет runtime-проверку и не меняет уже объявленную переменную.
 - Чем меньше параметров типа и чем очевиднее их связь, тем понятнее API.
 - Для конечного набора разных сигнатур overload может быть яснее; для взаимоисключающих данных — discriminated union.
 
@@ -157,7 +203,9 @@ function parse<T>(json: string): T {
 ## Источники
 
 - [TypeScript Handbook: Generics](https://www.typescriptlang.org/docs/handbook/2/generics.html)
+- [TypeScript Handbook: Generic constraints and defaults](https://www.typescriptlang.org/docs/handbook/2/generics.html#generic-parameter-defaults)
 - [TypeScript Handbook: Guidelines for Writing Good Generic Functions](https://www.typescriptlang.org/docs/handbook/2/functions.html#guidelines-for-writing-good-generic-functions)
+- [TypeScript 5.0: `const` Type Parameters](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-0.html#const-type-parameters)
 
 ---
 

@@ -1,7 +1,7 @@
 # key
 
 <!-- NOTE-NAV-TOP:START -->
-[← Fiber](<./Fiber.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Причины рендера →](<./Причины рендера.md>)
+[← Server state и React Query](<./Server state и React Query.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Error Boundaries →](<./Error Boundaries.md>)
 <!-- NOTE-NAV-TOP:END -->
 
 ## Быстрый ответ
@@ -146,5 +146,5 @@ function TodoDescriptions({ todos }: { todos: Todo[] }) {
 ---
 
 <!-- NOTE-NAV-BOTTOM:START -->
-[← Fiber](<./Fiber.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Причины рендера →](<./Причины рендера.md>)
+[← Server state и React Query](<./Server state и React Query.md>) · [↑ React](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Error Boundaries →](<./Error Boundaries.md>)
 <!-- NOTE-NAV-BOTTOM:END -->
