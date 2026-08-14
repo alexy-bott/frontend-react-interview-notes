@@ -602,7 +602,7 @@ Browser может ограничить максимальное время хр
 
 ### Основные CORS response headers
 
-#### `Access-Control-Allow-Origin`
+**`Access-Control-Allow-Origin`**
 
 Определяет origin, которому разрешено читать response:
 
@@ -662,7 +662,7 @@ https://notexample.com
 https://evil-example.com
 ```
 
-#### `Access-Control-Allow-Methods`
+**`Access-Control-Allow-Methods`**
 
 Используется в preflight response и сообщает разрешённые methods:
 
@@ -673,7 +673,7 @@ Access-Control-Allow-Methods:
 
 Это CORS-разрешение для browser, а не замена server-side routing и authorization.
 
-#### `Access-Control-Allow-Headers`
+**`Access-Control-Allow-Headers`**
 
 Сообщает, какие дополнительные request headers разрешены:
 
@@ -684,7 +684,7 @@ Access-Control-Allow-Headers:
 
 Если frontend хочет передать header, которого нет в разрешённом списке, preflight не пройдёт.
 
-#### `Access-Control-Allow-Credentials`
+**`Access-Control-Allow-Credentials`**
 
 Разрешает frontend-коду получить credentialed response:
 
@@ -702,7 +702,7 @@ true
 
 При credentialed request недостаточно только этого header: нужен также точный `Access-Control-Allow-Origin`.
 
-#### `Access-Control-Expose-Headers`
+**`Access-Control-Expose-Headers`**
 
 Даже после успешного CORS JavaScript по умолчанию видит только ограниченный набор response headers.
 
@@ -723,7 +723,7 @@ response.headers.get("X-Request-Id");
 
 Browser обрабатывает его самостоятельно, а Fetch API не позволяет прочитать его как обычный response header.
 
-#### `Access-Control-Max-Age`
+**`Access-Control-Max-Age`**
 
 Задаёт время хранения успешного preflight result:
 
@@ -731,7 +731,7 @@ Browser обрабатывает его самостоятельно, а Fetch A
 Access-Control-Max-Age: 600
 ```
 
-#### `Vary: Origin`
+**`Vary: Origin`**
 
 Если server возвращает разный `Access-Control-Allow-Origin` в зависимости от request `Origin`, response должен сообщить HTTP-кешу, что это разные варианты:
 
@@ -839,7 +839,7 @@ Frontend может не получить:
 
 Но возможны два принципиально разных сценария.
 
-#### Preflight не прошёл
+**Preflight не прошёл**
 
 ```text
 OPTIONS отправлен
@@ -851,7 +851,7 @@ actual request не отправлен
 
 В этом случае основная операция обычно не выполнялась.
 
-#### Actual request был обработан
+**Actual request был обработан**
 
 ```text
 actual request отправлен
@@ -1417,7 +1417,7 @@ script-src https://analytics.example
 
 Поэтому CSP дополняют другими мерами.
 
-#### Self-hosting
+**Self-hosting**
 
 Self-hosting означает размещение копии зависимости на инфраструктуре приложения.
 
@@ -1435,7 +1435,7 @@ Self-hosting означает размещение копии зависимос
 - соблюдение лицензии;
 - контроль целостности сборки.
 
-#### Subresource Integrity
+**Subresource Integrity**
 
 SRI (Subresource Integrity, контроль целостности подресурса) позволяет зафиксировать ожидаемый cryptographic hash внешнего script или stylesheet.
 
@@ -1466,7 +1466,7 @@ SRI защищает от неожиданного изменения содер
 
 Если ожидаемый script сам является вредоносным или уязвимым, SRI не исправит его.
 
-#### Sandboxed iframe
+**Sandboxed iframe**
 
 Недоверенный widget можно запускать не как script внутри основной страницы, а в отдельном iframe с `sandbox`.
 

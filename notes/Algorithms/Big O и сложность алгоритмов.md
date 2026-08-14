@@ -1,6 +1,8 @@
 # Big O и сложность алгоритмов
 
-[↑ Algorithms](./README.md) · [⌂ Все разделы](../../README.md) · [Сложность Array методов →](<./Сложность Array методов.md>)
+<!-- NOTE-NAV-TOP:START -->
+[↑ Algorithms](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Сложность Array методов →](<./Сложность Array методов.md>)
+<!-- NOTE-NAV-TOP:END -->
 
 ## Быстрый ответ
 
@@ -187,4 +189,6 @@ function getSelectedItems(items: Item[], selectedIds: string[]) {
 
 ---
 
-[↑ Algorithms](./README.md) · [⌂ Все разделы](../../README.md) · [Сложность Array методов →](<./Сложность Array методов.md>)
+<!-- NOTE-NAV-BOTTOM:START -->
+[↑ Algorithms](<./README.md>) · [⌂ Все разделы](<../../README.md>) · [Сложность Array методов →](<./Сложность Array методов.md>)
+<!-- NOTE-NAV-BOTTOM:END -->
