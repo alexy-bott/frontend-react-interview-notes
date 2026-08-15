@@ -12,7 +12,7 @@ Cache entry определяется именем endpoint и сериализо
 
 RTK Query хранит данные backend. Открытая модалка, выбранный tab и черновик UI остаются в React state или client store.
 
-## Ключевая схема
+## Карта темы
 
 ```text
 component calls generated query hook(arg)
@@ -22,8 +22,9 @@ component calls generated query hook(arg)
 -> result enters Redux cache
 -> subscribed components update
 
-mutation succeeds
--> invalidates tags
+mutation finishes
+-> baseQuery returns data or error
+-> invalidatesTags determines tags (and can use result/error)
 -> active affected queries refetch
 ```
 
@@ -44,7 +45,7 @@ mutation succeeds
 
 **Подключение к store**
 
-`createApi` возвращает reducer и middleware с разными ролями. Reducer хранит записи cache, данные и статусы запросов в Redux state по ключу `reducerPath`. Сгенерированные thunks endpoints запускают `baseQuery`, а API middleware отслеживает подписки на cache и управляет invalidation, polling и временем жизни записей. Поэтому к store подключают и reducer, и middleware: без reducer результатам негде храниться, а без middleware не работают предусмотренные механизмы подписок и жизненного цикла cache.
+`createApi` возвращает reducer и middleware с разными ролями. Reducer хранит записи cache, данные и статусы запросов в Redux state по ключу `reducerPath`. Сгенерированные для endpoints thunks запускают `baseQuery`, а API middleware отслеживает подписки на cache и управляет invalidation, polling и временем жизни записей. Поэтому к store подключают и reducer, и middleware: без reducer результатам негде храниться, а без middleware не работают предусмотренные механизмы подписок и жизненного цикла cache.
 
 `setupListeners(store.dispatch)` отдельно связывает RTK Query с событиями браузера: возвращением фокуса и восстановлением соединения. Он нужен, если используются `refetchOnFocus` или `refetchOnReconnect`; базовые запросы без этих настроек работают и без него.
 
@@ -54,7 +55,7 @@ mutation succeeds
 
 Для query RTK Query сериализует аргумент и вместе с именем endpoint получает cache key. Поэтому два вызова `getPost("42")` делят cache, а `getPost("43")` создаёт другую запись. Все параметры, влияющие на ответ, должны входить в arg.
 
-RTK Query считает подписки на cache entry. Пока данные использует хотя бы один компонент, запись активна. После последней отписки запускается `keepUnusedDataFor`; default - 60 секунд. Повторный mount в этот период получает cache без нового пустого состояния, а политика refetch определяет, нужно ли обновить данные.
+RTK Query считает подписки на cache entry. Пока данные использует хотя бы один компонент, запись активна. После последней отписки запускается таймер удаления; `keepUnusedDataFor` задаёт его длительность, по умолчанию 60 секунд. Повторный mount в этот период получает cache без нового пустого состояния, а политика refetch определяет, нужно ли обновить данные.
 
 **Query result и UX**
 
@@ -81,7 +82,7 @@ Cache хранится по endpoint + arg. Одна сущность, полу�
 
 **Mutation и optimistic update**
 
-Простой и надёжный вариант - invalidation после успешной mutation. Если мгновенный UI важен, `onQueryStarted` может вызвать `api.util.updateQueryData`, получить patch result и выполнить `.undo()` при ошибке. При нескольких пересекающихся mutations rollback становится сложнее; иногда безопаснее инвалидировать tags и запросить server truth заново.
+Простой и надёжный вариант - tag invalidation после завершения mutation. `invalidatesTags` вычисляется и после успешного результата, и после ошибки, которую `baseQuery` вернул в поле `error`: callback может выбрать теги по значениям `result` и `error`. Если мгновенный UI важен, `onQueryStarted` может вызвать `api.util.updateQueryData`, получить patch result и выполнить `.undo()` при ошибке. При нескольких пересекающихся mutations rollback становится сложнее; иногда безопаснее инвалидировать tags и запросить server truth заново.
 
 **Auth и ошибки**
 
@@ -185,6 +186,16 @@ export function Posts() {
 }
 ```
 
+## Где применяется во frontend
+
+| Сценарий | Как помогает RTK Query |
+| --- | --- |
+| Одни данные показывают несколько компонентов | RTK Query использует общий cache key, поэтому выполняет один запрос и передаёт изменение cache entry всем подписанным компонентам. |
+| После изменения сущности нужно обновить список и карточку | `invalidatesTags` определяет теги; RTK Query находит предоставившие их cache entries и заново запрашивает активные queries. |
+| Экран обновляется в фоне | `isLoading` отделяет первую загрузку от `isFetching` во время polling, refetch по фокусу или ручного обновления. |
+| Изменение должно сразу появиться в UI | `onQueryStarted` и `updateQueryData` позволяют применить optimistic update, а при ошибке выполнить rollback или refetch. |
+| Данные приходят через WebSocket или SSE | `onCacheEntryAdded` позволяет обновлять cache, пока существует подписка, и закрыть соединение после удаления cache entry. |
+
 ## Ключевые уточнения
 
 - Query cache key состоит из endpoint и сериализованного аргумента.
@@ -211,10 +222,14 @@ export function Posts() {
 ## Источники
 
 - [RTK Query docs: Cache Behavior](https://redux-toolkit.js.org/rtk-query/usage/cache-behavior)
+- [RTK Query API: createApi](https://redux-toolkit.js.org/rtk-query/api/createApi)
 - [RTK Query docs: Queries](https://redux-toolkit.js.org/rtk-query/usage/queries)
 - [RTK Query docs: Automated Re-fetching](https://redux-toolkit.js.org/rtk-query/usage/automated-refetching)
 - [RTK Query docs: Manual Cache Updates](https://redux-toolkit.js.org/rtk-query/usage/manual-cache-updates)
+- [RTK Query docs: Customizing Queries](https://redux-toolkit.js.org/rtk-query/usage/customizing-queries)
+- [RTK Query docs: Error Handling](https://redux-toolkit.js.org/rtk-query/usage/error-handling)
 - [RTK Query docs: Streaming Updates](https://redux-toolkit.js.org/rtk-query/usage/streaming-updates)
+- [RTK Query docs: Code Generation](https://redux-toolkit.js.org/rtk-query/usage/code-generation)
 
 ---
 
