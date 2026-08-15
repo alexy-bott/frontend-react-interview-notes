@@ -29,12 +29,17 @@ def planned_moves(notes_root: Path) -> dict[Path, Path]:
 
 def validate_moves(moves: Mapping[Path, Path], notes_root: Path) -> None:
     root = notes_root.resolve()
-    sources = set(moves)
-    targets = list(moves.values())
+    normalized_moves: dict[Path, Path] = {}
 
     for source, target in moves.items():
         if not source.is_absolute() or not target.is_absolute():
             raise ValueError("move paths must be absolute")
+        normalized_moves[source.resolve()] = target.resolve()
+
+    sources = set(normalized_moves)
+    targets = list(normalized_moves.values())
+
+    for source, target in normalized_moves.items():
         for path in (source, target):
             try:
                 path.relative_to(root)
@@ -51,6 +56,8 @@ def validate_moves(moves: Mapping[Path, Path], notes_root: Path) -> None:
 
 def apply_moves(moves: Mapping[Path, Path], notes_root: Path) -> None:
     root = notes_root.resolve()
+    validate_moves(moves, root)
+    moves = {source.resolve(): target.resolve() for source, target in moves.items()}
     markdown_files = sorted(root.rglob("*.md"))
     display_names = {source: display_title(source) for source in moves}
     rewritten: dict[Path, str] = {}
