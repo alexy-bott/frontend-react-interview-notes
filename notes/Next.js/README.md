@@ -1,20 +1,20 @@
 # Next.js
 
 <!-- SECTION-NAV:START -->
-[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./Next.js 14.md>)
+[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./01 Next.js 14.md>)
 
 Заметок в разделе: **7**
 <!-- SECTION-NAV:END -->
 
 ## Темы
 
-- [Next.js 14](<./Next.js 14.md>)
-- [App Router](<./App Router.md>)
-- [Server и Client Components](<./Server и Client Components.md>)
-- [SSR SSG ISR Streaming](<./SSR SSG ISR Streaming.md>)
-- [Data fetching cache revalidation](<./Data fetching cache revalidation.md>)
-- [Server Actions и Route Handlers](<./Server Actions и Route Handlers.md>)
-- [Deployment env Docker](<./Deployment env Docker.md>)
+- [Next.js 14](<./01 Next.js 14.md>)
+- [App Router](<./02 App Router.md>)
+- [Серверные и клиентские компоненты](<./03 Серверные и клиентские компоненты.md>)
+- [SSR, SSG, ISR и Streaming](<./04 SSR, SSG, ISR и Streaming.md>)
+- [Получение данных, кеш и ревалидация](<./05 Получение данных, кеш и ревалидация.md>)
+- [Server Actions и Route Handlers](<./06 Server Actions и Route Handlers.md>)
+- [Деплой, переменные окружения и Docker](<./07 Деплой, переменные окружения и Docker.md>)
 
 ## Маршрут
 

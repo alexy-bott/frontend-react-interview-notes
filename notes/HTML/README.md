@@ -1,19 +1,19 @@
 # HTML
 
 <!-- SECTION-NAV:START -->
-[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./HTML.md>)
+[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./01 HTML.md>)
 
 Заметок в разделе: **6**
 <!-- SECTION-NAV:END -->
 
 ## Темы
 
-- [HTML](<./HTML.md>)
-- [Семантическая верстка](<./Семантическая верстка.md>)
-- [Accessibility](<./Accessibility.md>)
-- [Формы](<./Формы.md>)
-- [Head meta и resource hints](<./Head meta и resource hints.md>)
-- [Изображения и responsive media](<./Изображения и responsive media.md>)
+- [HTML](<./01 HTML.md>)
+- [Семантическая вёрстка](<./02 Семантическая вёрстка.md>)
+- [Доступность HTML](<./03 Доступность HTML.md>)
+- [Формы](<./04 Формы.md>)
+- [head, метаданные и ресурсные подсказки](<./05 head, метаданные и ресурсные подсказки.md>)
+- [Изображения и адаптивные медиа](<./06 Изображения и адаптивные медиа.md>)
 
 ## Маршрут
 
@@ -26,7 +26,7 @@
 
 ## Углубление доступности
 
-- [Semantics ARIA и accessible name](<../Accessibility/Semantics ARIA и accessible name.md>)
-- [Keyboard navigation и focus management](<../Accessibility/Keyboard navigation и focus management.md>)
+- [Семантика, ARIA и доступное имя](<../Доступность/01 Семантика, ARIA и доступное имя.md>)
+- [Клавиатурная навигация и управление фокусом](<../Доступность/02 Клавиатурная навигация и управление фокусом.md>)
 
-HTML parser, stylesheets, scripts и media также связаны с [Critical Render Path](<../Web Basics/Critical Render Path.md>).
+HTML parser, stylesheets, scripts и media также связаны с [Критический путь рендеринга (Critical Render Path)](<../Основы веб-платформы/20 Критический путь рендеринга (Critical Render Path).md>).

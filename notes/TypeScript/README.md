@@ -1,7 +1,7 @@
 # TypeScript
 
 <!-- SECTION-NAV:START -->
-[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./Плюсы и минусы TypeScript.md>)
+[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./01 Плюсы и минусы TypeScript.md>)
 
 Заметок в разделе: **25**
 <!-- SECTION-NAV:END -->
@@ -12,49 +12,49 @@
 
 ### 1. Назначение и границы TypeScript
 
-- [Плюсы и минусы TypeScript](<./Плюсы и минусы TypeScript.md>)
+- [Плюсы и минусы TypeScript](<./01 Плюсы и минусы TypeScript.md>)
 
 ### 2. Базовые типы и вывод
 
-- [Типы данных](<./Типы данных.md>)
-- [Type inference widening и contextual typing](<./Type inference widening и contextual typing.md>)
-- [never any unknown](<./never any unknown.md>)
-- [Type assertions и non-null assertion](<./Type assertions и non-null assertion.md>)
+- [Типы данных](<./02 Типы данных.md>)
+- [Вывод типов, widening и контекстная типизация](<./03 Вывод типов, widening и контекстная типизация.md>)
+- [never, any и unknown](<./04 never, any и unknown.md>)
+- [Утверждения типов и non-null assertion](<./05 Утверждения типов и non-null assertion.md>)
 
 ### 3. Варианты данных и сужение типов
 
-- [Unions intersections discriminated unions](<./Unions intersections discriminated unions.md>)
-- [Type Guards](<./Type Guards.md>)
+- [Объединения, пересечения и дискриминируемые объединения](<./06 Объединения, пересечения и дискриминируемые объединения.md>)
+- [Type Guards](<./07 Type Guards.md>)
 
 ### 4. Объекты, функции и классы
 
-- [type vs interface](<./type vs interface.md>)
-- [Structural typing](<./Structural typing.md>)
-- [Типизация функций](<./Типизация функций.md>)
-- [Классы access modifiers abstract и private](<./Классы access modifiers abstract и private.md>)
+- [type и interface](<./08 type и interface.md>)
+- [Структурная типизация](<./09 Структурная типизация.md>)
+- [Типизация функций](<./10 Типизация функций.md>)
+- [Классы — модификаторы доступа, abstract и private](<./11 Классы — модификаторы доступа, abstract и private.md>)
 
 ### 5. Обобщённые типы (generics) и совместимость
 
-- [Generics](<./Generics.md>)
-- [Function overloads](<./Function overloads.md>)
-- [Variance и совместимость функций](<./Variance и совместимость функций.md>)
-- [Array map типизация](<./Array map типизация.md>)
+- [Дженерики](<./12 Дженерики.md>)
+- [Перегрузка функций](<./13 Перегрузка функций.md>)
+- [Вариантность и совместимость функций](<./14 Вариантность и совместимость функций.md>)
+- [Типизация Array.map](<./15 Типизация Array.map.md>)
 
 ### 6. Преобразование типов
 
-- [keyof indexed access mapped types](<./keyof indexed access mapped types.md>)
-- [Utility Types](<./Utility Types.md>)
-- [infer и conditional types](<./infer и conditional types.md>)
-- [as const и satisfies](<./as const и satisfies.md>)
+- [keyof, indexed access и mapped types](<./16 keyof, indexed access и mapped types.md>)
+- [Utility Types](<./17 Utility Types.md>)
+- [infer и условные типы](<./18 infer и условные типы.md>)
+- [as const и satisfies](<./19 as const и satisfies.md>)
 
 ### 7. Конфигурация, модули и исполняемый код
 
-- [tsconfig и strict mode](<./tsconfig и strict mode.md>)
-- [enum](<./enum.md>)
-- [import type и isolatedModules](<./import type и isolatedModules.md>)
-- [Declaration files](<./Declaration files.md>)
+- [tsconfig и строгий режим](<./20 tsconfig и строгий режим.md>)
+- [enum](<./21 enum.md>)
+- [import type и isolatedModules](<./22 import type и isolatedModules.md>)
+- [Файлы деклараций](<./23 Файлы деклараций.md>)
 
 ### 8. TypeScript во frontend
 
-- [Проверка данных с backend](<./Проверка данных с backend.md>)
-- [React TypeScript типизация](<./React TypeScript типизация.md>)
+- [Проверка данных с бэкенда](<./24 Проверка данных с бэкенда.md>)
+- [Типизация React с TypeScript](<./25 Типизация React с TypeScript.md>)

@@ -1,29 +1,29 @@
 # DevOps
 
 <!-- SECTION-NAV:START -->
-[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./Docker для frontend.md>)
+[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./01 Docker для фронтенда.md>)
 
 Заметок в разделе: **7**
 <!-- SECTION-NAV:END -->
 
 ## Темы
 
-- [Docker для frontend](<./Docker для frontend.md>)
-- [Dockerfile и multi-stage build](<./Dockerfile и multi-stage build.md>)
-- [Nginx и static serving](<./Nginx и static serving.md>)
-- [Env variables и секреты](<./Env variables и секреты.md>)
-- [Artifacts cache variables](<./Artifacts cache variables.md>)
-- [GitLab CI CD](<./GitLab CI CD.md>)
-- [Frontend pipeline](<./Frontend pipeline.md>)
+- [Docker для фронтенда](<./01 Docker для фронтенда.md>)
+- [Многоэтапная сборка Dockerfile](<./02 Многоэтапная сборка Dockerfile.md>)
+- [Nginx и раздача статических файлов](<./03 Nginx и раздача статических файлов.md>)
+- [Переменные окружения и секреты](<./04 Переменные окружения и секреты.md>)
+- [Артефакты, кеш и переменные пайплайна](<./05 Артефакты, кеш и переменные пайплайна.md>)
+- [GitLab CI-CD](<./06 GitLab CI-CD.md>)
+- [CI-CD-пайплайн фронтенда](<./07 CI-CD-пайплайн фронтенда.md>)
 
 ## Связанные разделы
 
-- [Deployment env Docker](<../Next.js/Deployment env Docker.md>)
-- [Vite](<../Tooling/Vite.md>)
-- [Webpack](<../Tooling/Webpack.md>)
-- [Воспроизводимые версии в команде](<../Tooling/Воспроизводимые версии в команде.md>)
-- [Git для frontend](<../Git/Git для frontend.md>)
-- [Jira](<../Workflow/Jira.md>)
+- [Деплой, переменные окружения и Docker](<../Next.js/07 Деплой, переменные окружения и Docker.md>)
+- [Vite](<../Инструменты разработки/10 Vite.md>)
+- [Webpack](<../Инструменты разработки/11 Webpack.md>)
+- [Воспроизводимые версии в команде](<../Инструменты разработки/05 Воспроизводимые версии в команде.md>)
+- [Git для фронтенда](<../Git/01 Git для фронтенда.md>)
+- [Jira](<../Процессы разработки/02 Jira.md>)
 
 ## Маршрут
 

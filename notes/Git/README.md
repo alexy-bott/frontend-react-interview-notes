@@ -1,7 +1,7 @@
 # Git
 
 <!-- SECTION-NAV:START -->
-[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./Git для frontend.md>)
+[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./01 Git для фронтенда.md>)
 
 Заметок в разделе: **3**
 <!-- SECTION-NAV:END -->
@@ -12,14 +12,14 @@
 
 ### 1. Модель Git и рабочий цикл
 
-- [Git для frontend](<./Git для frontend.md>)
+- [Git для фронтенда](<./01 Git для фронтенда.md>)
 
 ### 2. Интеграция и отмена изменений
 
-- [Merge rebase cherry-pick revert reset](<./Merge rebase cherry-pick revert reset.md>)
+- [merge, rebase, cherry-pick, revert и reset](<./02 merge, rebase, cherry-pick, revert и reset.md>)
 
 ### 3. Совместная работа
 
-- [Конфликты и code review](<./Конфликты и code review.md>)
+- [Конфликты и код-ревью](<./03 Конфликты и код-ревью.md>)
 
 Сначала нужно понимать, где находится изменение и на что указывают `HEAD` и ветка. Тогда merge, rebase, разрешение конфликтов и восстановление истории перестают быть набором несвязанных команд.

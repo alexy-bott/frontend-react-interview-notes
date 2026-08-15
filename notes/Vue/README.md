@@ -1,19 +1,19 @@
 # Vue
 
 <!-- SECTION-NAV:START -->
-[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./Options API и Composition API.md>)
+[⌂ Все разделы](<../../README.md>) · [Начать с первой заметки →](<./01 Options API и Composition API.md>)
 
 Заметок в разделе: **6**
 <!-- SECTION-NAV:END -->
 
 ## Темы
 
-- [Options API и Composition API](<./Options API и Composition API.md>)
-- [Реактивность](<./Реактивность.md>)
-- [Virtual DOM](<./Virtual DOM.md>)
-- [Slots](<./Slots.md>)
-- [Lifecycle](<./Lifecycle.md>)
-- [Proxy](<./Proxy.md>)
+- [Options API и Composition API](<./01 Options API и Composition API.md>)
+- [Реактивность](<./02 Реактивность.md>)
+- [Виртуальный DOM](<./03 Виртуальный DOM.md>)
+- [Слоты](<./04 Слоты.md>)
+- [Жизненный цикл](<./05 Жизненный цикл.md>)
+- [Proxy](<./06 Proxy.md>)
 
 ## Маршрут
 
