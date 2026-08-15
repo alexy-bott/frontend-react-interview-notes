@@ -218,11 +218,11 @@ def rewrite_internal_links(
             new_destination = f"{new_destination}#{fragment}"
 
         label = match.group("label")
-        target = (
-            f"<{new_destination}>"
-            if match.group("angle_destination") is not None
-            else new_destination
+        needs_angle_brackets = (
+            match.group("angle_destination") is not None
+            or bool(re.search(r"\s", new_destination))
         )
+        target = f"<{new_destination}>" if needs_angle_brackets else new_destination
         return f"[{label}]({target})"
 
     return _rewrite_links_outside_fences(text, rewrite)

@@ -115,6 +115,20 @@ class RewriteInternalLinksTests(unittest.TestCase):
 
         self.assertEqual(rewritten, "See [refs](<./13 useRef.md>).")
 
+    def test_bare_destination_is_wrapped_when_renamed_path_contains_spaces(self) -> None:
+        current = ROOT / "notes" / "Section" / "A.md"
+        old_target = ROOT / "notes" / "Section" / "B.md"
+        new_target = ROOT / "notes" / "Section" / "02 Renamed.md"
+
+        rewritten = note_paths.rewrite_internal_links(
+            "See [topic](./B.md).",
+            current,
+            current,
+            {old_target.resolve(): new_target.resolve()},
+        )
+
+        self.assertEqual(rewritten, "See [topic](<./02 Renamed.md>).")
+
     def test_inline_code_with_one_or_more_backticks_is_not_rewritten(self) -> None:
         current = ROOT / "notes" / "Section" / "A.md"
         old_target = ROOT / "notes" / "Section" / "B.md"
