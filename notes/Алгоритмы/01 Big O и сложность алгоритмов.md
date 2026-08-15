@@ -178,7 +178,7 @@ function getSelectedItems(items: Item[], selectedIds: string[]) {
 - [Типовые алгоритмические задачи во фронтенде](<./04 Типовые алгоритмические задачи во фронтенде.md>)
 - [Map, Set, WeakMap и WeakSet](<../JavaScript/27 Map, Set, WeakMap и WeakSet.md>)
 - [Оптимизация фронтенда](<../JavaScript/51 Оптимизация фронтенда.md>)
-- [Мемоизация](../React/16 Мемоизация.md)
+- [Мемоизация](<../React/16 Мемоизация.md>)
 - [Причины рендера](<../React/05 Причины рендера.md>)
 
 ## Источники
