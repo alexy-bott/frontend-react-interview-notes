@@ -7,9 +7,21 @@ from collections.abc import Mapping
 from pathlib import Path
 
 try:
-    from .note_paths import display_title, numbered_filename, rewrite_internal_links, section_order
+    from .note_paths import (
+        active_markdown_files,
+        display_title,
+        numbered_filename,
+        rewrite_internal_links,
+        section_order,
+    )
 except ImportError:
-    from note_paths import display_title, numbered_filename, rewrite_internal_links, section_order
+    from note_paths import (
+        active_markdown_files,
+        display_title,
+        numbered_filename,
+        rewrite_internal_links,
+        section_order,
+    )
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,7 +46,10 @@ def validate_moves(moves: Mapping[Path, Path], notes_root: Path) -> None:
     for source, target in moves.items():
         if not source.is_absolute() or not target.is_absolute():
             raise ValueError("move paths must be absolute")
-        normalized_moves[source.resolve()] = target.resolve()
+        normalized_source = source.resolve()
+        if normalized_source in normalized_moves:
+            raise ValueError("move sources must be unique after normalization")
+        normalized_moves[normalized_source] = target.resolve()
 
     sources = set(normalized_moves)
     targets = list(normalized_moves.values())
@@ -58,15 +73,14 @@ def apply_moves(moves: Mapping[Path, Path], notes_root: Path) -> None:
     root = notes_root.resolve()
     validate_moves(moves, root)
     moves = {source.resolve(): target.resolve() for source, target in moves.items()}
-    markdown_files = sorted(root.rglob("*.md"))
-    display_names = {source: display_title(source) for source in moves}
+    markdown_files = active_markdown_files(root.parent)
     rewritten: dict[Path, str] = {}
 
     for source in markdown_files:
         source = source.resolve()
         target = moves.get(source, source)
         text = source.read_text(encoding="utf-8")
-        rewritten[target] = rewrite_internal_links(text, source, target, moves, display_names)
+        rewritten[target] = rewrite_internal_links(text, source, target, moves)
 
     temporary_moves: dict[Path, Path] = {}
     for source in moves:

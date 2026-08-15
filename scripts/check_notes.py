@@ -5,14 +5,31 @@ import sys
 from pathlib import Path
 
 try:
-    from scripts.note_paths import parse_numbered_name, section_order
+    from scripts.note_paths import (
+        LINK_RE,
+        display_title,
+        is_external_destination,
+        link_destination,
+        parse_numbered_name,
+        section_manual_text,
+        section_order,
+        text_outside_fences,
+    )
 except ModuleNotFoundError:
-    from note_paths import parse_numbered_name, section_order
+    from note_paths import (
+        LINK_RE,
+        display_title,
+        is_external_destination,
+        link_destination,
+        parse_numbered_name,
+        section_manual_text,
+        section_order,
+        text_outside_fences,
+    )
 
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTES_ROOT = ROOT / "notes"
-LINK_RE = re.compile(r"\[[^\]]*\]\((?:<([^>]+)>|([^\s)]+))\)")
 RELATED_RE = re.compile(r"(?ms)^## Связанные темы\s*\n(?P<body>.*?)(?=^## |\Z)")
 DETAILS_RE = re.compile(r"(?ms)<details>.*?</details>")
 
@@ -40,22 +57,10 @@ def section_numbering_errors(readme: Path, ordered: list[Path]) -> list[str]:
     return errors
 
 
-def text_outside_fences(text: str) -> str:
-    result: list[str] = []
-    in_fence = False
-    for line in text.splitlines():
-        if line.strip().startswith(("```", "~~~")):
-            in_fence = not in_fence
-            continue
-        if not in_fence:
-            result.append(re.sub(r"`+[^`\n]*`+", "", line))
-    return "\n".join(result)
-
-
 def check_links(file: Path, text: str, errors: list[str]) -> None:
     for match in LINK_RE.finditer(text_outside_fences(text)):
-        target = (match.group(1) or match.group(2) or "").strip()
-        if not target or target.startswith(("http://", "https://", "mailto:", "#")):
+        target = link_destination(match)
+        if not target or is_external_destination(target):
             continue
         path_text = target.partition("#")[0]
         destination = (file.parent / path_text).resolve()
@@ -65,13 +70,63 @@ def check_links(file: Path, text: str, errors: list[str]) -> None:
 
 def internal_targets(file: Path, text: str) -> list[Path]:
     targets: list[Path] = []
-    for match in LINK_RE.finditer(text):
-        target = (match.group(1) or match.group(2) or "").strip()
-        if not target or target.startswith(("http://", "https://", "mailto:", "#")):
+    for match in LINK_RE.finditer(text_outside_fences(text)):
+        target = link_destination(match)
+        if not target or is_external_destination(target):
             continue
         path_text = target.partition("#")[0]
         targets.append((file.parent / path_text).resolve())
     return targets
+
+
+def related_topic_links(
+    note: Path, text: str, note_set: set[Path]
+) -> tuple[list[Path], list[str]]:
+    targets: list[Path] = []
+    errors: list[str] = []
+    for match in LINK_RE.finditer(text_outside_fences(text)):
+        destination = link_destination(match)
+        if not destination or is_external_destination(destination):
+            errors.append(f"related topic target is not a note: {destination}")
+            continue
+        path_text = destination.partition("#")[0]
+        target = (note.parent / path_text).resolve()
+        if target not in note_set:
+            errors.append(f"related topic target is not a note: {destination}")
+            continue
+        targets.append(target)
+    return targets, errors
+
+
+def section_readme_identity_errors(
+    readme: Path, text: str, section_notes: list[Path]
+) -> list[str]:
+    visible = section_manual_text(text)
+    errors: list[str] = []
+    headings = re.findall(r"^# ([^#].*)$", visible, flags=re.MULTILINE)
+    if len(headings) != 1:
+        errors.append("expected exactly one H1")
+    elif headings[0] != readme.parent.name:
+        errors.append(f"H1 differs from section directory: expected {readme.parent.name}")
+
+    note_set = {note.resolve() for note in section_notes}
+    for match in LINK_RE.finditer(visible):
+        destination = link_destination(match)
+        if not destination or is_external_destination(destination):
+            continue
+        target = (readme.parent / destination.partition("#")[0]).resolve()
+        if target not in note_set:
+            continue
+        label = match.group("label")
+        if re.match(r"^\d{2}(?:\s|$)", label):
+            errors.append(f"manual note link label contains numeric prefix: {label}")
+        expected_label = display_title(target)
+        if label != expected_label:
+            errors.append(
+                "manual note link label differs from note title: "
+                f"expected {expected_label}, got {label}"
+            )
+    return errors
 
 
 def main() -> int:
@@ -127,7 +182,11 @@ def main() -> int:
         if not related_match:
             errors.append(f"{relative}: related topics section is missing")
         else:
-            related_targets = internal_targets(note, related_match.group("body"))
+            related_targets, related_errors = related_topic_links(
+                note, related_match.group("body"), note_set
+            )
+            for error in related_errors:
+                errors.append(f"{relative}: {error}")
             if len(related_targets) < 2:
                 errors.append(f"{relative}: expected at least two related topics")
             if len(set(related_targets)) != len(related_targets):
@@ -135,7 +194,7 @@ def main() -> int:
             if note.resolve() in related_targets:
                 errors.append(f"{relative}: related topics contain a self-link")
             for target in related_targets:
-                if target in note_set and target != note.resolve():
+                if target != note.resolve():
                     related_inbound[target] += 1
         check_links(note, text, errors)
 
@@ -154,11 +213,12 @@ def main() -> int:
             errors.append(f"{relative}: note count is incorrect")
         if text.count("Начать с первой заметки →") != 1:
             errors.append(f"{relative}: start link is missing or duplicated")
-        if len(re.findall(r"^# [^#]", text_outside_fences(text), flags=re.MULTILINE)) != 1:
-            errors.append(f"{relative}: expected exactly one H1")
-        if not re.search(r"^## [^#]", text_outside_fences(text), flags=re.MULTILINE):
+        for error in section_readme_identity_errors(readme, text, section_notes):
+            errors.append(f"{relative}: {error}")
+        manual_visible = section_manual_text(text)
+        if not re.search(r"^## [^#]", manual_visible, flags=re.MULTILINE):
             errors.append(f"{relative}: expected at least one H2")
-        if "[[" in text_outside_fences(text):
+        if "[[" in manual_visible:
             errors.append(f"{relative}: unresolved Obsidian wikilink")
         readme_targets = set(internal_targets(readme, text))
         for note in section_notes:
