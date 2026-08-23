@@ -1,0 +1,9 @@
+23dad3a69dfaba1661722c7557fc1b5f3643fc24a920b73d467e2ae3be618a3a  legacy-root/_templates/repository-rules.md
+82b6360ca2e57e2b6f45bad4e46b9280107af62e776e388becd97b1d7f3bc0d3  legacy-root/_templates/note-rules/README.md
+8febf829b80c2c1aec1ab2d5de6dd0e6bd942ebd2882595e1e70c7ae9da972fd  legacy-root/_templates/note-rules/00-workflow.md
+350ca530e0eaf06eab27318a4aa8cdde5e34cbdbb90619221d9cf12743460a8b  legacy-root/_templates/note-rules/01-file-structure.md
+ab556c0170de9cd7fb6062670a4b46e88145249e63eb8e27e23cf515412e3a52  legacy-root/_templates/note-rules/02-block-structure.md
+aa6159f9221f20421cafed849ad9dca45bbfd01e7774658ab67bb623d78d2840  legacy-root/_templates/note-rules/03-content-distribution.md
+683c216af274e9e93ff0219ca3a711ed19b4988de66da356b1da7dcbaf8fa47e  legacy-root/_templates/note-rules/04-content-quality.md
+603bbadc80664ec36416ec14cedd0fd9001d89da473aff94c63e69bb0cfab51b  legacy-root/_templates/note-rules/05-editing.md
+aced76b3adc2d31248e99dc592a3b87a832cfeaeab1f6ae68490c13f10789812  legacy-root/_templates/note-rules/new-note-workflow.md
