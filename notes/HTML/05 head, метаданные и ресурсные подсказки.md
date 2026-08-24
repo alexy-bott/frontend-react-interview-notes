@@ -6,42 +6,128 @@
 
 ## Быстрый ответ
 
-`<head>` содержит metadata и связи документа с внешними ресурсами: кодировку, viewport, `<title>`, description, canonical URL, stylesheets, scripts, icons и resource hints. Эти данные влияют на разбор документа, mobile layout, название вкладки, поисковое представление и порядок обнаружения ресурсов, хотя большая их часть не отображается как содержимое страницы.
+`<head>` содержит метаданные документа и объявления ресурсов: кодировку, viewport, `<title>`, description, canonical URL, стили, скрипты, иконки и resource hints. Эти данные обычно не являются видимым содержимым страницы, но влияют на разбор HTML, mobile layout, название вкладки, поисковое представление и момент обнаружения ресурсов.
 
-Resource hints сообщают браузеру о вероятно важных соединениях или файлах. `preconnect` заранее готовит соединение с origin, `preload` рано загружает конкретный ресурс текущей страницы, а `prefetch` предлагает ресурс для возможного будущего перехода. Подсказки конкурируют за сеть, поэтому их добавляют после проверки waterfall и с корректными `as`, `type` и CORS-настройками.
+Resource hints позволяют заранее сообщить браузеру о ресурсе или origin, который, вероятно, скоро понадобится. `preconnect` просит раньше установить соединение с origin, `preload` заранее получает конкретный ресурс текущей навигации, `prefetch` предлагает получить ресурс для вероятной будущей навигации, а `modulepreload` заранее получает модуль и помещает его во внутреннее хранилище загруженных модулей (module map).
 
-## Ключевая схема
+Подсказка полезна только тогда, когда будущий запрос действительно совпадает с ней. Лишние preconnect и preload расходуют сетевые и системные ресурсы и могут конкурировать с более важной загрузкой.
 
-| Элемент | Назначение | Существенная граница |
+## Карта темы
+
+| Элемент или механизм | Что делает | Важная граница |
 | --- | --- | --- |
 | `<!doctype html>` | включает standards mode | находится перед `<html>`, а не внутри `<head>` |
-| `<meta charset>` | задаёт декодирование документа | размещается как можно раньше |
-| `meta viewport` | связывает layout viewport с устройством | не следует запрещать user zoom |
-| `<title>` | имя документа и вкладки | уникален и отражает текущую страницу |
-| `description` | описание содержимого | поисковик может выбрать другой snippet |
-| `canonical` | указывает предпочтительный URL | является сигналом, а не безусловной командой |
-| `preconnect` | заранее создаёт соединение | нужен только важному внешнему origin |
-| `preload` | начинает загрузку известного ресурса | не выполняет и не применяет ресурс сам по себе |
+| `<meta charset="utf-8">` | объявляет кодировку HTML | должен целиком находиться в первых 1024 байтах документа |
+| `meta viewport` | задаёт параметры layout viewport на мобильных устройствах | не должен лишать пользователя необходимого zoom |
+| `<title>` | задаёт название документа | обычно отображается во вкладке и используется внешними системами |
+| `meta description` | даёт краткое описание страницы | поисковая система может построить snippet из другого текста |
+| `rel="canonical"` | указывает предпочтительный URL | поисковая система может выбрать другой canonical |
+| `preconnect` | заранее готовит соединение с origin | имеет смысл только для origin, который скоро понадобится |
+| `preload` | заранее получает ресурс текущей навигации | `as`, CORS mode и другие параметры должны совпасть с реальным запросом |
+| `prefetch` | предлагает заранее получить ресурс для будущей навигации | браузер может отложить или пропустить такую загрузку |
+| `modulepreload` | заранее получает модуль в module map | модуль не выполняется только из-за `modulepreload` |
 
-## Базовая модель
+## Метаданные документа
 
-Browser начинает читать `<head>` до основного содержимого, поэтому порядок влияет на ранние решения. `meta charset="utf-8"` помещают в начало документа, `meta viewport` задаёт ожидаемую mobile-геометрию, а stylesheet и scripts формируют critical rendering path.
+`<head>` представляет коллекцию метаданных документа. Один из первых элементов обычно объявляет кодировку:
 
-`<link rel="stylesheet">` обычно блокирует render, пока CSS не загружен и не разобран. Обычный classic script без `async`/`defer` блокирует HTML parser на загрузку и выполнение. `defer` загружает внешний classic script параллельно и выполняет после parsing в порядке документа; `async` выполняет после загрузки без гарантии порядка относительно других async scripts. Module script откладывается по умолчанию подобно `defer`.
+```html
+<meta charset="utf-8">
+```
 
-Resource hint не меняет смысл ресурса. Preloaded stylesheet всё ещё нужно подключить как stylesheet, а preloaded font должен реально использоваться CSS. Браузер может не получить пользы от hint, если будущий запрос отличается по URL, destination или CORS mode.
+HTML Standard требует, чтобы элемент с декларацией кодировки целиком находился в первых 1024 байтах документа. Чем раньше браузер узнает правильную кодировку, тем меньше риск повторного разбора уже прочитанных байтов.
 
-## Развернутый ответ
+Базовая viewport-настройка для адаптивной страницы выглядит так:
 
-**Viewport.** Базовое `width=device-width, initial-scale=1` делает CSS viewport соответствующим ширине устройства. `user-scalable=no` и жёсткое ограничение `maximum-scale` мешают увеличению и создают проблему доступности.
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1">
+```
 
-**Metadata для поиска.** `<title>` и description должны описывать конкретную страницу, а `canonical` помогает объединять дублирующие URL. Ни один тег не гарантирует позицию или точный snippet: поисковая система учитывает доступный контент, HTTP-ответ, ссылки и собственные правила.
+Она сообщает мобильному браузеру, что layout viewport должен учитывать ширину устройства. Не следует без необходимости запрещать масштабирование через `user-scalable=no` или ограничивать `maximum-scale` ниже значения, позволяющего пользователю увеличить содержимое.
 
-**Preconnect.** Подсказка заранее выполняет DNS, TCP и при необходимости TLS setup для origin. Она экономит время только если соединение скоро понадобится. Большой список preconnect открывает лишние sockets; для менее уверенного случая существует более дешёвый `dns-prefetch`.
+`<title>` задаёт название документа. `meta name="description"` может использоваться поисковой системой как описание результата, но не гарантирует конкретный snippet. Например, Google в первую очередь формирует snippet из содержимого страницы и использует meta description только когда она лучше описывает результат.
 
-**Preload.** Указывает ресурс текущей навигации и его destination через `as`. Font обычно требует `as="font"`, MIME `type` и `crossorigin`, включая многие same-origin случаи из-за CORS-режима font fetch. Responsive image preload согласуют с `imagesrcset` и `imagesizes`, чтобы не загрузить неподходящий candidate.
+`rel="canonical"` указывает предпочтительный URL для текущего документа:
 
-**Prefetch.** Предназначен для вероятного будущего использования и имеет меньшую срочность, но браузер сам решает, выполнять ли подсказку. Для модулей текущей страницы существует `modulepreload`, который подготавливает module script и его зависимости в соответствии с browser implementation.
+```html
+<link rel="canonical" href="https://example.com/orders">
+```
+
+Для Google это сильный сигнал canonicalization, но не безусловная команда: поисковая система может выбрать другой URL, если остальные сигналы указывают на него.
+
+## Стили и скрипты в `head`
+
+Применимый `<link rel="stylesheet">` обычно участвует в блокировке первого рендеринга, потому что браузеру нужны стили для корректного отображения найденного содержимого.
+
+Обычный внешний classic script без `async` и `defer` может остановить HTML-парсер до загрузки и выполнения скрипта.
+
+```html
+<script src="/legacy.js"></script>
+```
+
+`defer` позволяет загружать classic script параллельно с HTML и выполнить его после завершения parsing, сохраняя порядок между deferred scripts:
+
+```html
+<script defer src="/app.js"></script>
+```
+
+`async` также загружается параллельно, но выполняется после готовности без гарантии порядка относительно других async scripts:
+
+```html
+<script async src="/analytics.js"></script>
+```
+
+Модульный скрипт без `async` уже имеет отложенную модель выполнения, поэтому дополнительный `defer` ему не нужен:
+
+```html
+<script type="module" src="/app.js"></script>
+```
+
+Подробные различия вынесены в заметку [«async и defer»](<../JavaScript/33 async и defer.md>).
+
+## Resource hints
+
+### `preconnect`
+
+```html
+<link rel="preconnect" href="https://static.example-cdn.com" crossorigin>
+```
+
+`preconnect` сообщает браузеру, что соединение с указанным origin (схема, host и port), вероятно, скоро понадобится. User agent может выполнить полный или частичный handshake либо пропустить предварительное соединение, если ресурсов устройства или сети недостаточно.
+
+Поэтому preconnect не является гарантией уже готового соединения. Большой список таких подсказок может расходовать ресурсы без пользы.
+
+### `preload`
+
+```html
+<link
+  rel="preload"
+  href="/fonts/interface.woff2"
+  as="font"
+  type="font/woff2"
+  crossorigin
+>
+```
+
+`preload` заранее получает ресурс, который нужен текущей навигации. Чтобы браузер смог переиспользовать результат, будущий запрос должен совпасть по URL, destination, request mode и credentials mode. Для font preload это обычно означает корректные `as="font"`, `type` и `crossorigin`.
+
+Сам `preload` не применяет ресурс. Например, preloaded stylesheet всё равно должен быть подключён как stylesheet, а preloaded font — реально запрошен из CSS.
+
+### `prefetch` и `modulepreload`
+
+`prefetch` предназначен для ресурса или same-site документа, который, вероятно, понадобится при будущей навигации. Браузер может отложить такой запрос, чтобы не мешать ресурсам текущей страницы.
+
+```html
+<link rel="prefetch" href="/next-page-data.json">
+```
+
+`modulepreload` предназначен для JavaScript modules. Он заранее получает модуль и помещает результат в module map — внутреннее хранилище уже загруженных модулей; браузер также может заранее получить часть его зависимостей.
+
+```html
+<link rel="modulepreload" href="/app.js">
+```
+
+Это подготавливает модуль к последующему использованию, но само по себе не выполняет его.
 
 ## Пример
 
@@ -52,7 +138,7 @@ Resource hint не меняет смысл ресурса. Preloaded stylesheet 
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>Заказы - Панель управления</title>
+    <title>Заказы — Панель управления</title>
     <meta
       name="description"
       content="Поиск, фильтрация и обработка заказов."
@@ -62,11 +148,12 @@ Resource hint не меняет смысл ресурса. Preloaded stylesheet 
     <link rel="preconnect" href="https://static.example-cdn.com" crossorigin>
     <link
       rel="preload"
-      href="/fonts/interface-latin.woff2"
+      href="https://static.example-cdn.com/fonts/interface.woff2"
       as="font"
       type="font/woff2"
       crossorigin
     >
+
     <link rel="stylesheet" href="/styles.css">
     <script type="module" src="/app.js"></script>
   </head>
@@ -74,15 +161,26 @@ Resource hint не меняет смысл ресурса. Preloaded stylesheet 
 </html>
 ```
 
-Font preload оправдан только если этот точный файл используется на первом экране. Module script не требует дополнительного `defer`; его зависимостям можно дать `modulepreload` только после измерения реальной задержки.
+Font preload оправдан только если этот файл действительно нужен достаточно рано, чтобы ранняя загрузка дала выигрыш. Module script не требует `defer`, потому что его обычная модель выполнения уже отложена относительно HTML parsing.
+
+## Где применяется во frontend
+
+- При настройке базового HTML-документа: кодировка, viewport и title должны быть известны браузеру до основной части страницы.
+- При SEO-настройке: description и canonical помогают описать страницу и предпочитаемый URL, но поисковая система принимает окончательное решение сама.
+- При подключении CSS и JavaScript: расположение и атрибуты ресурсов влияют на HTML parsing и первый рендер.
+- При оптимизации LCP и шрифтов: `preload` используют только для действительно критичного ресурса, который иначе обнаружился бы поздно.
+- При работе с внешним CDN или API: `preconnect` может убрать часть задержки установления соединения, если запрос действительно скоро произойдёт.
+- При code splitting: `modulepreload` может заранее подготовить модуль до момента его выполнения.
 
 ## Ключевые уточнения
 
-- Metadata описывает документ и влияет на browser/tooling, но не заменяет содержательный и семантический HTML.
-- `defer`, `async` и module script имеют разные правила выполнения; выбор зависит от порядка и зависимости от DOM.
-- `preload` запускает получение ресурса, но ресурс всё равно нужно применить обычным механизмом.
-- Resource hint приносит пользу только при совпадении с будущим запросом и реальной критичности; лишние hints расходуют сеть.
-- Viewport configuration должна поддерживать responsive layout, не запрещая пользователю масштабирование.
+- `<head>` содержит метаданные и объявления ресурсов, а не основное видимое содержимое страницы.
+- Декларация `<meta charset="utf-8">` должна целиком находиться в первых 1024 байтах HTML.
+- `defer`, `async` и module script имеют разные правила выполнения; `type="module"` уже отложен по умолчанию.
+- `preload` относится к текущей навигации, а `prefetch` — к вероятному будущему использованию.
+- Preload переиспользуется только при совместимых параметрах будущего запроса.
+- `preconnect` и другие resource hints являются оптимизационными подсказками и не должны добавляться массово без реальной потребности.
+- Meta description и canonical влияют на сигналы для поисковых систем, но не гарантируют конкретный snippet или выбранный canonical URL.
 
 ## Связанные темы
 
@@ -95,11 +193,12 @@ Font preload оправдан только если этот точный фай
 
 ## Источники
 
-- [WHATWG HTML: Document metadata](https://html.spec.whatwg.org/multipage/semantics.html#semantics)
-- [MDN: What's in the head?](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Structuring_content/Webpage_metadata)
-- [MDN: script element](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/script)
-- [MDN: rel=preload](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/preload)
-- [web.dev: Resource hints](https://web.dev/learn/performance/resource-hints)
+- [HTML Standard: Document metadata](https://html.spec.whatwg.org/multipage/semantics.html#semantics)
+- [HTML Standard: Link types](https://html.spec.whatwg.org/multipage/links.html)
+- [HTML Standard: Scripting](https://html.spec.whatwg.org/multipage/scripting.html)
+- [Google Search Central: Canonicalization](https://developers.google.com/search/docs/crawling-indexing/canonicalization)
+- [Google Search Central: Control your snippets](https://developers.google.com/search/docs/appearance/snippet)
+- [W3C WAI: Meta viewport allows for zoom](https://www.w3.org/WAI/standards-guidelines/act/rules/b4f0c3/)
 
 ---
 
