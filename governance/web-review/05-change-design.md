@@ -48,7 +48,10 @@ Web не передаёт Codex выбор между materially different ва�
 
 ## Структура
 
-Если проблема полностью детерминирована правилами Levels 1–2, Web может выдать `BOUNDED_STRUCTURE` с точным postcondition и protected prose.
+Если проблема полностью детерминирована правилами Levels 1–2, Web может выдать `BOUNDED_STRUCTURE` с protected prose.
+
+- Если Web задаёт exact итоговый файл/фрагмент, кандидат можно проверить primary/fresh до Codex и после исполнения подтвердить по verification contract.
+- Если Web задаёт только structural postcondition, actual итоговый файл появляется после Codex и проходит применимый primary review; full-review заметка получает fresh review exact actual `Vn`.
 
 Если содержанию требуется новый устойчивый тип блока, сначала меняется governance отдельной задачей. Codex не изобретает блок локально.
 
@@ -68,10 +71,13 @@ Codex может реализовать код внутри этого конт�
 - section;
 - точное место в смысловом маршруте;
 - ожидаемое название;
-- защищённое Web-authored содержание;
+- exact planned path map `old → new`;
+- protected-content manifest для Web-authored прозы, кода, подписей ссылок и идентичности тематических целей;
+- явный список generated regions;
+- разрешённые переписывания только назначений внутренних ссылок, необходимые из-за planned path map;
 - разрешение на `REPOSITORY_MAINTENANCE`.
 
-Конкретные навигационные блоки формируют штатные scripts.
+Конкретные навигационные блоки формируют штатные scripts. `renumber_notes.py --write` может переписывать назначения ссылок и вне generated regions, но только в соответствии с approved path map; подписи ссылок, окружающая проза, код и смысловая цель связи остаются защищёнными.
 
 ## Крупная правка
 
@@ -91,17 +97,19 @@ Level 5 создаёт bounded execution specification:
 
 ```text
 Analysis-base
-Candidate version / expected hashes
+Candidate version
+Verification contract: full-file hash or protected-content manifest
 Execution mode
 Allowed paths
 Confirmed FAILs
 Required semantic result
-Exact prose or exact replacements
+Exact prose/replacements or bounded postcondition
 Protected material
-Allowed generated changes
+Allowed generated regions
+Allowed path/link-destination rewrite map
 Task-specific checks
 STOP conditions
 Publication requirement
 ```
 
-Level 5 не подтверждает собственный результат. Candidate снова проходит primary Levels 1–4, а затем применимый fresh Web review.
+Level 5 не подтверждает собственный результат. Exact Web-кандидат проходит primary Levels 1–4 и применимый fresh Web review до исполнения. Candidate, который возникает только после `BOUNDED_CODE` или postcondition-only `BOUNDED_STRUCTURE`, проходит применимый primary review и fresh gate по правилам `00-workflow.md` на actual GitHub result.

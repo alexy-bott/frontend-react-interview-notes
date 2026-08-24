@@ -62,12 +62,13 @@
 Для каждой заметки Web фиксирует candidate version `Vn`:
 
 - exact repository path либо ожидаемое новое положение;
-- точный содержательный кандидат;
-- hash полного файла, если generated regions не меняются;
-- либо hash Web-authored содержимого вне `NOTE-NAV-*`, когда навигация будет сформирована штатным генератором;
+- точный содержательный кандидат либо явно bounded structural/code postcondition;
+- verification contract:
+  - hash полного файла, если Codex не должен менять generated regions, пути или внутренние ссылки;
+  - иначе protected-content manifest с точными Web-authored фрагментами или их hashes, явным списком generated regions и exact разрешёнными `old → new` переписываниями путей/назначений ссылок;
 - применимые source checks.
 
-Любое содержательное изменение создаёт `Vn+1` и отменяет предыдущие semantic confirmations.
+`Vn` обозначает защищённое смысловое содержание вместе с его verification contract. Штатная генерация навигации, переименование файлов и разрешённое переписывание назначений ссылок не создают `Vn+1`, только если actual diff полностью соответствует contract и не меняет подписи ссылок, прозу, код или идентичность тематических целей. Любое изменение защищённого содержания либо выход за contract создаёт `Vn+1` и отменяет предыдущие semantic confirmations.
 
 ## Существующая заметка
 
@@ -110,9 +111,9 @@ Level 4 обязательно включает:
 
 Для изменения прозы Web по умолчанию формулирует exact итоговый текст до Codex.
 
-### 4. Primary confirmation exact Web-кандидата
+### 4. Primary confirmation Web-кандидата
 
-Если Web уже сформировал exact содержательный кандидат, он проверяет полный `Vn` снова по применимым Levels 1–4. Положительный статус:
+Если Web уже сформировал exact содержательный кандидат или exact итоговую структуру, он проверяет полный `Vn` снова по применимым Levels 1–4. Положительный статус:
 
 ```text
 PRIMARY WEB PASS(Vn)
@@ -120,11 +121,11 @@ PRIMARY WEB PASS(Vn)
 
 Он недоступен при блокирующем `NOT CHECKED`.
 
-Если выбран `BOUNDED_CODE` и фактический код ещё должен создать Codex, до исполнения фиксируются Web-approved prose и code contract, но окончательный `Vn` возникает только после чтения actual GitHub result. Такой `Vn` проходит primary review после исполнения.
+Если выбран `BOUNDED_CODE` либо `BOUNDED_STRUCTURE` задан только как postcondition без exact итогового файла, до исполнения фиксируются защищённая проза и bounded contract. Фактический итоговый файл появляется только после Codex и проходит применимый primary review по actual GitHub result.
 
 ### 5. Fresh Web review
 
-Для окончательной готовности заметки с изменённым содержанием требуется независимый fresh review exact фактического `Vn`.
+Для окончательной готовности каждой новой, мигрируемой или явно взятой в полное ревью заметки требуется независимый fresh review exact фактического `Vn` — даже если primary review не потребовал изменения текста. Fresh gate защищает не только от регрессии после редактирования, но и от ложного первичного `PASS`.
 
 Fresh review:
 
@@ -143,11 +144,11 @@ Review в той же primary-беседе не может называться 
 FRESH WEB PASS(Vn)
 ```
 
-Pure mechanical change, которое доказанно не меняет Web-authored содержание заметки, не требует нового fresh semantic review, но требует Web-проверки структуры и actual diff.
+Отдельная pure mechanical задача, которая не является полным ревью заметки и доказанно не меняет protected content, может не запускать новый fresh semantic review, но требует Web-проверки структуры и actual diff. Эта льгота не позволяет объявить ранее не проверенную заметку готовой: новая, мигрируемая или явно взятая в полное ревью заметка всё равно требует `FRESH WEB PASS(Vn)`.
 
 ### 6. Codex execution
 
-Для exact Web-кандидата Codex запускается после primary и fresh confirmation. Для `BOUNDED_CODE` Codex запускается после утверждения prose и code contract; resulting actual file затем получает новый primary и fresh review.
+Для exact Web-кандидата или exact итоговой структуры Codex запускается после primary и fresh confirmation. Для `BOUNDED_CODE` и postcondition-only `BOUNDED_STRUCTURE` Codex запускается после утверждения protected prose и bounded contract; resulting actual file затем получает применимый primary review, а для новой, мигрируемой или полноценно ревьюируемой заметки — fresh review exact actual `Vn`.
 
 Web выбирает режим из [`../codex-execution.md`](<../codex-execution.md>):
 
@@ -169,7 +170,9 @@ Web выбирает режим из [`../codex-execution.md`](<../codex-executi
 - соответствие Web-authored части exact `Vn`;
 - generated regions и repository invariants отдельно.
 
-Совпадение exact candidate не требует третьего смыслового переписывания. Если Codex реализовал `BOUNDED_CODE`, actual result становится новым exact `Vn`: Web выполняет полный primary review и отдельный fresh review до `CANDIDATE READY`.
+Если actual result совпадает с full-file hash либо protected-content manifest и все generated/path rewrites входят в разрешённый contract, прежние primary/fresh confirmations exact Web-кандидата сохраняются: третье смысловое переписывание не требуется.
+
+Если Codex реализовал `BOUNDED_CODE` или postcondition-only `BOUNDED_STRUCTURE`, actual result становится exact фактическим `Vn`: Web выполняет применимый primary review. Fresh review выполняется заново, если заметка новая, мигрируемая, явно взята в полное ревью либо protected semantic content изменилось. Предыдущее fresh confirmation можно сохранить только для отдельной mechanical structure-задачи, когда protected content побайтово/по manifest неизменно и задача не является полным ревью заметки.
 
 ### 8. Candidate status
 
@@ -182,7 +185,7 @@ CANDIDATE READY(Vn)
 только если:
 
 - primary и требуемый fresh review относятся к тому же `Vn`;
-- actual branch соответствует утверждённому кандидату;
+- actual branch соответствует утверждённому кандидату и его verification contract;
 - нет блокирующих `NOT CHECKED`;
 - repository checks дали `REPO PASS`;
 - base и scope подтверждены.
@@ -209,7 +212,7 @@ READY(Vn)
 
 Corpus review выполняется последовательно по заметкам. Для каждой заметки отдельно фиксируются path, `Vn`, primary status, fresh status и repository status.
 
-Codex может применить batch из нескольких exact кандидатов только если Web перечислил каждый path, hash, scope и допустимые generated changes. Batch не превращает заметки в один общий semantic verdict.
+Codex может применить batch из нескольких exact кандидатов только если Web перечислил для каждого path, verification contract, scope и допустимые generated/path changes. Batch не превращает заметки в один общий semantic verdict.
 
 ## Статусы
 

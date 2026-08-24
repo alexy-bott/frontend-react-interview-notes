@@ -58,7 +58,7 @@ NOTE-NAV-BOTTOM:START / NOTE-NAV-BOTTOM:END
 
 `scripts/generate_navigation.py` обслуживает только `NOTE-NAV-*`, `SECTION-NAV-*` и счётчики главной страницы.
 
-`scripts/renumber_notes.py` синхронизирует числовые префиксы с порядком секционного README и переписывает внутренние ссылки.
+`scripts/renumber_notes.py` синхронизирует числовые префиксы с порядком секционного README и переписывает внутренние ссылки. Такое переписывание может происходить вне generated regions, но является механическим только когда каждое новое назначение следует exact approved path map. Подписи ссылок, окружающая проза, код и идентичность тематической цели при этом не меняются.
 
 ## Добавление, удаление и перемещение заметок
 
@@ -75,8 +75,10 @@ python scripts/renumber_notes.py --write
 python scripts/generate_navigation.py
 ```
 
-4. проверяет resulting scope;
-5. запускает полный набор checks.
+4. сверяет переименования с exact planned path map и проверяет protected-content manifest;
+5. подтверждает, что вне generated regions изменены только разрешённые назначения ссылок;
+6. проверяет resulting scope;
+7. запускает полный набор checks.
 
 Write-команды не запускаются для обычной содержательной правки, которая не меняет состав, порядок, имена и generated navigation.
 

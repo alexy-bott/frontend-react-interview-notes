@@ -40,13 +40,15 @@ Codex получает полный итоговый файл, точный patc
 - применяет их без самостоятельного перефразирования;
 - не добавляет полезные, по его мнению, пояснения;
 - не сокращает и не перестраивает соседний текст;
-- проверяет ожидаемый hash, если он задан.
+- проверяет full-file hash либо protected-content manifest, если он задан.
 
 ### `BOUNDED_STRUCTURE`
 
 Используется для детерминированной Markdown/HTML-структуры без нового смыслового решения.
 
 Codex может исправить только явно заданный structural postcondition: заголовок, обёртку, вложенность, установленный блок или другое однозначное требование. Защищённая проза остаётся неизменной.
+
+Если Web дал exact итоговый файл, Codex подтверждает его по verification contract. Если Web дал только postcondition, Codex не объявляет resulting file проверенным: actual result возвращается Web для применимого primary/fresh review.
 
 ### `BOUNDED_CODE`
 
@@ -59,6 +61,8 @@ Web задаёт интерфейс, поведение, учебную функ
 Используется для штатных инструментов репозитория: нумерации, переписывания внутренних ссылок и генерации навигации.
 
 Codex запускает только предусмотренные команды и не редактирует вручную блоки `NOTE-NAV-*` или `SECTION-NAV-*`.
+
+Если `renumber_notes.py --write` переписывает внутренние ссылки вне generated regions, допустимы только изменения назначений ссылок, которые следуют exact approved path map. Подписи ссылок, окружающая проза, код и semantic target identity остаются защищёнными; любое иное изменение требует `STOP`.
 
 ## Scope
 
@@ -84,7 +88,7 @@ python scripts/check_notes.py
 git diff --check
 ```
 
-Write-режимы `renumber_notes.py --write` и `generate_navigation.py` запускаются только когда Web-инструкция прямо требует изменения состава, порядка, имени или навигации.
+Write-режимы `renumber_notes.py --write` и `generate_navigation.py` запускаются только когда Web-инструкция прямо требует изменения состава, порядка, имени или навигации. После них Codex сверяет full-file hash либо protected-content manifest, generated regions и approved path/link-destination rewrite map.
 
 Успешная механическая проверка не является смысловым `PASS` Levels 1–4.
 
