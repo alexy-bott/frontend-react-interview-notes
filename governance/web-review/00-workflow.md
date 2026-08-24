@@ -123,32 +123,11 @@ PRIMARY WEB PASS(Vn)
 
 Если выбран `BOUNDED_CODE` либо `BOUNDED_STRUCTURE` задан только как postcondition без exact итогового файла, до исполнения фиксируются защищённая проза и bounded contract. Фактический итоговый файл появляется только после Codex и проходит применимый primary review по actual GitHub result.
 
-### 5. Fresh Web review
+### 5. Codex execution
 
-Для окончательной готовности каждой новой, мигрируемой или явно взятой в полное ревью заметки требуется независимый fresh review exact фактического `Vn` — даже если primary review не потребовал изменения текста. Fresh gate защищает не только от регрессии после редактирования, но и от ложного первичного `PASS`.
+Для exact Web-кандидата или exact итоговой структуры Codex запускается после `PRIMARY WEB PASS(Vn)`. Для `BOUNDED_CODE` и postcondition-only `BOUNDED_STRUCTURE` Codex запускается после утверждения protected prose и bounded contract.
 
-Fresh review:
-
-- выполняется в новой top-level сессии ChatGPT Web;
-- получает одну заметку, её path/контекст и активную governance;
-- не получает primary verdict, список предыдущих `FAIL`, rationale, change design или diff как подсказку;
-- самостоятельно выполняет Levels 1–4 и применимые source checks;
-- работает read-only;
-- не проектирует и не исполняет исправление.
-
-Review в той же primary-беседе не может называться fresh.
-
-Положительный статус:
-
-```text
-FRESH WEB PASS(Vn)
-```
-
-Отдельная pure mechanical задача, которая не является полным ревью заметки и доказанно не меняет protected content, может не запускать новый fresh semantic review, но требует Web-проверки структуры и actual diff. Эта льгота не позволяет объявить ранее не проверенную заметку готовой: новая, мигрируемая или явно взятая в полное ревью заметка всё равно требует `FRESH WEB PASS(Vn)`.
-
-### 6. Codex execution
-
-Для exact Web-кандидата или exact итоговой структуры Codex запускается после primary и fresh confirmation. Для `BOUNDED_CODE` и postcondition-only `BOUNDED_STRUCTURE` Codex запускается после утверждения protected prose и bounded contract; resulting actual file затем получает применимый primary review, а для новой, мигрируемой или полноценно ревьюируемой заметки — fresh review exact actual `Vn`.
+Fresh Web confirmation не является предварительным условием записи в изолированную feature branch. Исполнение Codex только создаёт actual GitHub candidate для независимой проверки. Оно не даёт заметке `CANDIDATE READY` и не заменяет обязательный fresh review.
 
 Web выбирает режим из [`../codex-execution.md`](<../codex-execution.md>):
 
@@ -159,7 +138,7 @@ Web выбирает режим из [`../codex-execution.md`](<../codex-executi
 
 Одна Web-инструкция означает один semantic execution pass. Codex не выполняет внутренний цикл `review → rewrite → review`.
 
-### 7. Web verification actual branch
+### 6. Web verification actual branch
 
 После push Web читает:
 
@@ -170,9 +149,59 @@ Web выбирает режим из [`../codex-execution.md`](<../codex-executi
 - соответствие Web-authored части exact `Vn`;
 - generated regions и repository invariants отдельно.
 
-Если actual result совпадает с full-file hash либо protected-content manifest и все generated/path rewrites входят в разрешённый contract, прежние primary/fresh confirmations exact Web-кандидата сохраняются: третье смысловое переписывание не требуется.
+Если actual result совпадает с full-file hash либо protected-content manifest и все generated/path rewrites входят в разрешённый contract, `PRIMARY WEB PASS(Vn)` exact Web-кандидата сохраняется. Actual candidate commit становится единственным объектом последующего fresh review; повторное смысловое переписывание только из-за переноса текста в feature branch не требуется.
 
-Если Codex реализовал `BOUNDED_CODE` или postcondition-only `BOUNDED_STRUCTURE`, actual result становится exact фактическим `Vn`: Web выполняет применимый primary review. Fresh review выполняется заново, если заметка новая, мигрируемая, явно взята в полное ревью либо protected semantic content изменилось. Предыдущее fresh confirmation можно сохранить только для отдельной mechanical structure-задачи, когда protected content побайтово/по manifest неизменно и задача не является полным ревью заметки.
+Если Codex реализовал `BOUNDED_CODE` или postcondition-only `BOUNDED_STRUCTURE`, actual result становится exact фактическим `Vn`. Web выполняет применимый primary review по actual GitHub result. Только версия, получившая `PRIMARY WEB PASS(Vn)` на exact содержании либо подтверждённая по verification contract, может быть передана на fresh review.
+
+После проверки Web фиксирует отдельно для каждой заметки:
+
+- exact candidate commit SHA;
+- repository path;
+- candidate version `Vn`;
+- соответствие verification contract;
+- repository status.
+
+### 7. Fresh Web review
+
+Для окончательной готовности каждой новой, мигрируемой или явно взятой в полное ревью заметки требуется независимый fresh review exact фактического `Vn` в проверенной feature branch — даже если primary review не потребовал изменения текста. Fresh gate защищает как от регрессии исполнения, так и от ложного первичного `PASS`.
+
+Fresh review запускается после Web verification actual branch. Fresh-сессия получает actual GitHub candidate, а не файл, который пользователь должен вручную скачать или перенести.
+
+Fresh review:
+
+- выполняется в отдельной top-level сессии ChatGPT Web, изолированной от primary review;
+- получает repository, exact candidate commit SHA, exact path или список paths и governance ref SHA;
+- может читать секционный `README.md`, связанные заметки и другой необходимый current context непосредственно из указанного GitHub commit;
+- не получает primary verdict, список предыдущих `FAIL`, rationale, change design, старую версию текста, diff или отчёт Codex как подсказку;
+- самостоятельно выполняет Levels 1–4 и применимые source checks;
+- работает read-only;
+- не проектирует и не исполняет исправление.
+
+Одна fresh-сессия может последовательно проверять несколько разных заметок, один batch из нескольких заметок и последующие batches. Отдельная top-level сессия для каждой заметки не требуется.
+
+Каждая заметка остаётся самостоятельной единицей review. Для каждого path отдельно фиксируются:
+
+- exact candidate commit SHA;
+- candidate version `Vn`;
+- Levels 1–4;
+- применимые source checks;
+- `FRESH WEB PASS(Vn)`, `FAIL` или блокирующий `NOT CHECKED`.
+
+Общий fresh verdict на batch не заменяет отдельных verdicts по его заметкам.
+
+Fresh-сессия может позже проверять путь, который ранее только встречался ей как repository context, если она не получала по нему primary/change materials и не выносила самостоятельный semantic verdict. Простое чтение связанной страницы как контекста другой заметки не делает её primary reviewer этой страницы.
+
+Если fresh-сессия уже вынесла semantic verdict по конкретному path, семантически изменённый `Vn+1` этого path передаётся другой независимой top-level fresh-сессии. Такая следующая сессия образует новое fresh-поколение, например `Fresh-B` после `Fresh-A`. Одно fresh-поколение может проверять сразу все накопившиеся исправленные заметки, которых оно ранее не ревьюило.
+
+Review в primary-беседе не может называться fresh.
+
+Положительный статус:
+
+```text
+FRESH WEB PASS(Vn)
+```
+
+Отдельная pure mechanical задача, которая не является полным ревью заметки и доказанно не меняет protected content, может сохранить существующий fresh status exact semantic `Vn`, но требует Web-проверки структуры, verification contract и actual diff. Эта льгота не позволяет объявить ранее не проверенную заметку готовой: новая, мигрируемая или явно взятая в полное ревью заметка всё равно требует `FRESH WEB PASS(Vn)`.
 
 ### 8. Candidate status
 
@@ -206,13 +235,25 @@ READY(Vn)
 
 ## Создание новой заметки
 
-Используется [`new-note-workflow.md`](<./new-note-workflow.md>), затем тот же primary/fresh/execution/publication процесс.
+Используется [`new-note-workflow.md`](<./new-note-workflow.md>), затем тот же процесс `primary → execution → Web verification → fresh → candidate status → publication`.
 
 ## Работа с несколькими заметками
 
 Corpus review выполняется последовательно по заметкам. Для каждой заметки отдельно фиксируются path, `Vn`, primary status, fresh status и repository status.
 
-Codex может применить batch из нескольких exact кандидатов только если Web перечислил для каждого path, verification contract, scope и допустимые generated/path changes. Batch не превращает заметки в один общий semantic verdict.
+Codex может применить batch из нескольких exact кандидатов только если Web перечислил для каждого path:
+
+- candidate version;
+- verification contract;
+- allowed scope;
+- допустимые generated/path changes;
+- task-specific checks.
+
+Batch не превращает заметки в один общий semantic verdict.
+
+Одна fresh-сессия может проверить actual GitHub batch из нескольких заметок. Она самостоятельно читает каждую заметку и возвращает отдельный verdict для каждого path.
+
+Если после fresh `FAIL` несколько заметок получили новые semantic versions, их можно накопить и передать одним batch следующему fresh-поколению. Для каждого path всё равно сохраняются отдельные `Vn`, primary status и fresh status.
 
 ## Статусы
 

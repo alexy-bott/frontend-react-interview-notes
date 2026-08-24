@@ -51,7 +51,7 @@ Web проектирует:
 
 Web создаёт exact Web-authored содержание заметки по Levels 1–4. Generated navigation может быть оставлена штатному механизму репозитория, но Web фиксирует verification contract: exact protected content, generated regions, planned final path и разрешённые path/link-destination rewrites.
 
-Exact Web-authored candidate получает `PRIMARY WEB PASS(Vn)` и требуемый `FRESH WEB PASS(Vn)` до передачи Codex. Если Codex должен создать bounded code, до исполнения утверждаются проза и code contract, а actual resulting `Vn` проходит primary и fresh review после push.
+Exact Web-authored candidate получает `PRIMARY WEB PASS(Vn)` до передачи Codex. После push Web подтверждает actual feature branch по verification contract, а отдельная fresh-сессия проверяет exact actual `Vn` непосредственно из GitHub. Если Codex должен создать bounded code, до исполнения утверждаются проза и code contract, а actual resulting `Vn` после push сначала проходит применимый primary review и затем fresh review.
 
 ## 5. Execution
 
@@ -92,4 +92,4 @@ Web читает actual GitHub diff и проверяет:
 - отсутствие посторонних переименований;
 - CI/repository checks.
 
-Далее применяется `CANDIDATE READY → publication → READY` из `00-workflow.md`.
+После Web verification exact actual `Vn` передаётся отдельной fresh-сессии по candidate commit SHA и итоговому repository path. Только после `FRESH WEB PASS(Vn)` и выполнения остальных gates применяется `CANDIDATE READY → publication → READY` из `00-workflow.md`.

@@ -50,8 +50,8 @@ Web не передаёт Codex выбор между materially different ва�
 
 Если проблема полностью детерминирована правилами Levels 1–2, Web может выдать `BOUNDED_STRUCTURE` с protected prose.
 
-- Если Web задаёт exact итоговый файл/фрагмент, кандидат можно проверить primary/fresh до Codex и после исполнения подтвердить по verification contract.
-- Если Web задаёт только structural postcondition, actual итоговый файл появляется после Codex и проходит применимый primary review; full-review заметка получает fresh review exact actual `Vn`.
+- Если Web задаёт exact итоговый файл/фрагмент, кандидат получает primary review до Codex. После исполнения Web подтверждает actual feature branch по verification contract, а fresh-сессия проверяет exact actual `Vn` непосредственно из GitHub.
+- Если Web задаёт только structural postcondition, actual итоговый файл появляется после Codex и проходит применимый primary review по GitHub result; full-review заметка затем получает fresh review exact actual `Vn`.
 
 Если содержанию требуется новый устойчивый тип блока, сначала меняется governance отдельной задачей. Codex не изобретает блок локально.
 
@@ -112,4 +112,4 @@ STOP conditions
 Publication requirement
 ```
 
-Level 5 не подтверждает собственный результат. Exact Web-кандидат проходит primary Levels 1–4 и применимый fresh Web review до исполнения. Candidate, который возникает только после `BOUNDED_CODE` или postcondition-only `BOUNDED_STRUCTURE`, проходит применимый primary review и fresh gate по правилам `00-workflow.md` на actual GitHub result.
+Level 5 не подтверждает собственный результат. Exact Web-кандидат проходит primary Levels 1–4 до исполнения. После Codex Web проверяет actual feature branch по verification contract, а fresh-сессия выполняет независимый review exact actual `Vn` непосредственно из GitHub. Candidate, который возникает только после `BOUNDED_CODE` или postcondition-only `BOUNDED_STRUCTURE`, сначала проходит применимый primary review по actual GitHub result, а затем тот же fresh gate по правилам `00-workflow.md`.
