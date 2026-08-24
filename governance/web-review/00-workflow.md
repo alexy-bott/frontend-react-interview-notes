@@ -161,23 +161,25 @@ Web выбирает режим из [`../codex-execution.md`](<../codex-executi
 - соответствие verification contract;
 - repository status.
 
-### 7. Fresh Web review
+### 7. Independent Fresh lane
 
-Для окончательной готовности каждой новой, мигрируемой или явно взятой в полное ревью заметки требуется независимый fresh review exact фактического `Vn` в проверенной feature branch — даже если primary review не потребовал изменения текста. Fresh gate защищает как от регрессии исполнения, так и от ложного первичного `PASS`.
+Для окончательной готовности каждой новой, мигрируемой или явно взятой в полное ревью заметки требуется независимый Web-review actual GitHub candidate после Web verification feature branch. Независимая lane защищает как от регрессии исполнения, так и от ложного первичного `PASS`.
 
-Fresh review запускается после Web verification actual branch. Fresh-сессия получает actual GitHub candidate, а не файл, который пользователь должен вручную скачать или перенести.
+#### Initial Fresh
 
-Fresh review:
+Первый независимый review конкретного path выполняется как полный Initial Fresh review exact фактического `Vn`.
+
+Initial Fresh:
 
 - выполняется в отдельной top-level сессии ChatGPT Web, изолированной от primary review;
 - получает repository, exact candidate commit SHA, exact path или список paths и governance ref SHA;
 - может читать секционный `README.md`, связанные заметки и другой необходимый current context непосредственно из указанного GitHub commit;
-- не получает primary verdict, список предыдущих `FAIL`, rationale, change design, старую версию текста, diff или отчёт Codex как подсказку;
-- самостоятельно выполняет Levels 1–4 и применимые source checks;
+- не получает primary verdict, список primary `FAIL`, rationale, change design, старую версию текста, diff или отчёт Codex как подсказку;
+- самостоятельно выполняет complete Levels 1–4 и применимые source checks;
 - работает read-only;
 - не проектирует и не исполняет исправление.
 
-Одна fresh-сессия может последовательно проверять несколько разных заметок, один batch из нескольких заметок и последующие batches. Отдельная top-level сессия для каждой заметки не требуется.
+Одна independent Fresh lane может последовательно проверять несколько разных заметок и batches. Отдельная top-level сессия для каждой заметки не требуется.
 
 Каждая заметка остаётся самостоятельной единицей review. Для каждого path отдельно фиксируются:
 
@@ -187,21 +189,150 @@ Fresh review:
 - применимые source checks;
 - `FRESH WEB PASS(Vn)`, `FAIL` или блокирующий `NOT CHECKED`.
 
-Общий fresh verdict на batch не заменяет отдельных verdicts по его заметкам.
+Общий verdict на batch не заменяет отдельных verdicts по его заметкам.
 
-Fresh-сессия может позже проверять путь, который ранее только встречался ей как repository context, если она не получала по нему primary/change materials и не выносила самостоятельный semantic verdict. Простое чтение связанной страницы как контекста другой заметки не делает её primary reviewer этой страницы.
+Полный Initial Fresh создаёт fresh-owned baseline evidence даже если итоговый verdict — `FAIL`: независимая lane может сохранить собственные положительные результаты для тех semantic units и под-проверок, которые она действительно проверила и не пометила `FAIL` или `NOT CHECKED`.
 
-Если fresh-сессия уже вынесла semantic verdict по конкретному path, семантически изменённый `Vn+1` этого path передаётся другой независимой top-level fresh-сессии. Такая следующая сессия образует новое fresh-поколение, например `Fresh-B` после `Fresh-A`. Одно fresh-поколение может проверять сразу все накопившиеся исправленные заметки, которых оно ранее не ревьюило.
+Fresh-сессия может позже впервые проверять path, который ранее только встречался ей как repository context, если она не получала по нему primary/change materials и не выносила самостоятельный semantic verdict.
 
-Review в primary-беседе не может называться fresh.
+#### Follow-up после semantic correction
 
-Положительный статус:
+Semantic `Vn+1` после Initial Fresh `FAIL` не требует автоматически нового fresh-поколения и полного rereview всей заметки.
+
+Та же независимая Fresh lane может выполнить Follow-up review, используя только собственную предыдущую review history:
 
 ```text
-FRESH WEB PASS(Vn)
+previous Fresh-reviewed blob
+→ current actual candidate blob
+→ changed semantic units
+→ dependency cone
+→ whole-note consistency scan
+````
+
+В Follow-up lane разрешено самостоятельно сравнивать свой previous reviewed blob с current candidate. Это сравнение является частью собственного independent review evidence и не считается передачей Primary diff.
+
+Follow-up не получает:
+
+* primary verdict по новой версии;
+* primary rationale;
+* primary change design;
+* Codex report;
+* объяснение того, какие именно правки Primary считал достаточными.
+
+Если та же top-level Fresh-сессия продолжает lane, она использует собственные прежние findings и source evidence. Если valid fresh-owned baseline невозможно доказательно восстановить, incremental mode недоступен и выполняется полный независимый review.
+
+#### Semantic units
+
+Fresh reviewer выбирает минимальную самостоятельно проверяемую единицу, которая сохраняет смысл. Обычно это:
+
+* отдельный абзац;
+* список или таблица;
+* code block вместе с непосредственно объясняющим его текстом;
+* самостоятельный фрагмент внутри тематического H2/H3;
+* стандартизированный смысловой блок, если его части зависят друг от друга;
+* набор source entries, относящийся к одному изменяемому claim или API.
+
+Byte-identical semantic units могут наследовать только собственное previous Fresh evidence. Primary evidence таким способом не наследуется.
+
+#### Dependency cone
+
+Incremental Follow-up обязан проверять не только изменённую строку.
+
+Минимальный impact cone определяется так:
+
+| Тип изменения                                | Что повторно проверяется                                                                        |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Локальная формулировка                       | изменённая unit, соседний контекст и summary/clarification, если они повторяют тот же смысл     |
+| Техническое утверждение                      | изменённая unit, зависимые пример/таблица/code fragment и применимый current primary source     |
+| Новый или уточнённый термин                  | место определения и все зависимые использования термина в заметке                               |
+| Source-only correction                       | применимость нового source и соответствие source тому claim/API, который он должен подтверждать |
+| Удаление или перенос материала               | затронутые исходный и итоговый блоки, completeness, distribution и redundancy                   |
+| Изменение keyboard/state/data-flow механизма | все локальные примеры, таблицы и ключевые уточнения, которые используют тот же механизм         |
+
+После dependency cone всегда выполняется короткий whole-note consistency scan. Он проверяет, что correction:
+
+* не создала противоречие с byte-identical материалом;
+* не оставила старую формулировку того же механизма в другом месте;
+* не нарушила терминологическую согласованность;
+* не создала новый существенный пробел;
+* не создала локальную перегруженность или дублирование;
+* не нарушила обязательный внешний и внутренний каркас заметки.
+
+#### Source evidence в Follow-up
+
+Изменённый или зависимый technical claim проверяется заново по актуальному применимому primary source.
+
+Byte-identical claims могут наследовать собственное Fresh source evidence и не требуют полного повторного исследования на каждом cycle.
+
+Fresh reviewer обязан переоткрыть unchanged evidence, если:
+
+* source или API materially изменились;
+* предыдущее evidence стало явно устаревшим;
+* current correction меняет интерпретацию зависимого claim;
+* whole-note consistency scan выявляет возможное противоречие;
+* reviewer больше не может доказательно считать старое evidence применимым.
+
+#### Escalation в FULL Follow-up
+
+Incremental mode прекращается и Follow-up выполняется как полный Levels 1–4 review current candidate, если выполняется хотя бы одно условие:
+
+* изменены filename, H1 или identity темы;
+* materially изменена центральная учебная модель или основной механизм заметки;
+* substantially переписан `Быстрый ответ` так, что изменился contract всей заметки;
+* добавлен новый самостоятельный механизм или новый существенный аспект темы;
+* material перемещён между тематическими блоками так, что требуется заново оценивать content distribution;
+* изменено больше трёх независимых content semantic units, не считая source entries, которые только документируют уже существующие claims;
+* одновременно существенно перестроено несколько тематических H2/H3;
+* изменена semantic criteria identity Levels 1–4;
+* relevant previous review имел блокирующий `NOT CHECKED`;
+* dependency cone невозможно доказательно ограничить;
+* consistency scan обнаружил возможную регрессию вне первоначального cone.
+
+FULL Follow-up может выполнять та же независимая Fresh lane: она остаётся независимой от Primary, но заново выполняет complete Levels 1–4 и применимые current source checks.
+
+Новое fresh-поколение само по себе не требуется только потому, что появился `Vn+1`. Новая top-level independent lane требуется, если текущая lane получила primary/change materials, потеряла доказуемую независимость либо valid fresh-owned review lineage недоступна.
+
+Review в primary-беседе не может называться Fresh или Follow-up independent review.
+
+#### Follow-up verdict
+
+Положительный Follow-up status:
+
+```text
+FOLLOW-UP WEB PASS(Vn)
 ```
 
-Отдельная pure mechanical задача, которая не является полным ревью заметки и доказанно не меняет protected content, может сохранить существующий fresh status exact semantic `Vn`, но требует Web-проверки структуры, verification contract и actual diff. Эта льгота не позволяет объявить ранее не проверенную заметку готовой: новая, мигрируемая или явно взятая в полное ревью заметка всё равно требует `FRESH WEB PASS(Vn)`.
+Он допустим только если:
+
+* существует complete Initial Fresh baseline для этого path;
+* все previous Fresh findings, относящиеся к current lineage, закрыты или доказанно больше не применимы;
+* changed units и dependency cone получили применимые проверки;
+* whole-note consistency scan дал `PASS`;
+* нет блокирующих `NOT CHECKED`;
+* current candidate остаётся независимым от Primary review lane.
+
+Для incremental PASS не требуется повторять полный отчёт Levels 1–4. Достаточно зафиксировать:
+
+```text
+Path
+Candidate version
+Mode: INCREMENTAL
+Reviewed changed units
+Dependency cone
+Inherited Fresh evidence
+Source checks
+Whole-note consistency
+Open findings
+FOLLOW-UP WEB PASS(Vn)
+```
+
+При `FAIL`, `NOT CHECKED` или `Mode: FULL` reviewer сообщает применимые детали достаточно полно, чтобы было ясно, какая проверка не пройдена.
+
+#### Mechanical corrections
+
+Pure mechanical correction, которая доказанно не меняет protected semantic content, не создаёт новую semantic version и может сохранить существующий `FRESH WEB PASS(Vn)` или `FOLLOW-UP WEB PASS(Vn)` после Web verification actual diff, verification contract и repository invariants.
+
+Эта льгота не позволяет объявить ранее не проверенную заметку готовой: initial independent full review остаётся обязательным для новой, мигрируемой или явно взятой в полное ревью заметки.
 
 ### 8. Candidate status
 
@@ -213,7 +344,7 @@ CANDIDATE READY(Vn)
 
 только если:
 
-- primary и требуемый fresh review относятся к тому же `Vn`;
+- `PRIMARY WEB PASS(Vn)` относится к current `Vn`, а independent gate закрыт либо `FRESH WEB PASS(Vn)`, либо `FOLLOW-UP WEB PASS(Vn)` с complete Initial Fresh lineage и закрытыми previous Fresh findings;
 - actual branch соответствует утверждённому кандидату и его verification contract;
 - нет блокирующих `NOT CHECKED`;
 - repository checks дали `REPO PASS`;
@@ -235,7 +366,7 @@ READY(Vn)
 
 ## Создание новой заметки
 
-Используется [`new-note-workflow.md`](<./new-note-workflow.md>), затем тот же процесс `primary → execution → Web verification → fresh → candidate status → publication`.
+Используется [`new-note-workflow.md`](<./new-note-workflow.md>), затем тот же процесс `primary → execution → Web verification → Initial Fresh / применимый Follow-up → candidate status → publication`.
 
 ## Работа с несколькими заметками
 
@@ -253,7 +384,7 @@ Batch не превращает заметки в один общий semantic v
 
 Одна fresh-сессия может проверить actual GitHub batch из нескольких заметок. Она самостоятельно читает каждую заметку и возвращает отдельный verdict для каждого path.
 
-Если после fresh `FAIL` несколько заметок получили новые semantic versions, их можно накопить и передать одним batch следующему fresh-поколению. Для каждого path всё равно сохраняются отдельные `Vn`, primary status и fresh status.
+Если после Initial Fresh `FAIL` несколько заметок получили новые semantic versions, их можно накопить и передать одним Follow-up batch той же independent Fresh lane. Для каждого path отдельно определяются changed units, dependency cone, необходимость escalation в FULL и итоговый independent status.
 
 ## Статусы
 
@@ -263,6 +394,7 @@ Batch не превращает заметки в один общий semantic v
 PASS / FAIL / NOT CHECKED по Levels 1–4
 PRIMARY WEB PASS(Vn)
 FRESH WEB PASS(Vn)
+FOLLOW-UP WEB PASS(Vn)
 ```
 
 Репозиторные:
